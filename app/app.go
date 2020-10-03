@@ -12,12 +12,14 @@ import (
 var router = gin.Default()
 
 func StartApp() {
-	session := cassandra.GetSession()
+	session := mysql.GetSession()
 	defer session.Close()
 	handler := controllers.NewHandler(
 		services.NewTaskHandlerService(
 			tasks.NewService(
 				repository.CassandraRepo)))
 
-	router.POST("task", handler.Create)
+	router.POST("/task", handler.Create)
+
+	router.Run(":8082")
 }

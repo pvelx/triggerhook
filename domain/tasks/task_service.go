@@ -2,29 +2,36 @@ package tasks
 
 import (
 	"errors"
-	"github.com/VladislavPav/trigger-hook/repository"
+	"github.com/VladislavPav/trigger-hook/utils"
 )
+
+type RepositoryInterface interface {
+	Create(task *Task) *utils.ErrorRepo
+	Delete(task Task) *utils.ErrorRepo
+	FindBySecToExecTime(secToNow int64) (Tasks, *utils.ErrorRepo)
+	ChangeStatusToCompleted(*Task) *utils.ErrorRepo
+}
 
 type Service interface {
 	Create(Task) (*Task, *error)
 	Delete(Task) (*Task, *error)
 	UpdateTask(Task) (*Task, *error)
-	FindToExec(secToLaunch int64) ([]*Task, *error)
+	FindToExec(secToLaunch int64) (Tasks, error)
 	UpdateNextExecTime(Task) ([]*Task, *error)
 }
 
-func NewService(repo repository.RepositoryInterface) Service {
+func NewService(repo RepositoryInterface) Service {
 	return &service{
 		repo: repo,
 	}
 }
 
 type service struct {
-	repo repository.RepositoryInterface
+	repo RepositoryInterface
 }
 
 func (s *service) Create(task Task) (*Task, *error) {
-	if err := s.repo.Create(task); err != nil {
+	if err := s.repo.Create(&task); err != nil {
 		err := errors.New(err.Error())
 		return nil, &err
 	}
@@ -36,9 +43,14 @@ func (s *service) Delete(task Task) (*Task, *error) {
 	return nil, nil
 }
 
-func (s *service) FindToExec(secToLaunch int64) ([]*Task, *error) {
+func (s *service) FindToExec(secToLaunch int64) (Tasks, error) {
 
-	return nil, nil
+	tasks, err := s.repo.FindBySecToExecTime(secToLaunch)
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+
+	return tasks, nil
 }
 
 func (s *service) UpdateTask(task Task) (*Task, *error) {
