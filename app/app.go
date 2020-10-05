@@ -1,7 +1,6 @@
 package app
 
 import (
-	"github.com/VladislavPav/trigger-hook/clients/cassandra"
 	"github.com/VladislavPav/trigger-hook/controllers"
 	"github.com/VladislavPav/trigger-hook/domain/tasks"
 	"github.com/VladislavPav/trigger-hook/repository"
@@ -12,14 +11,12 @@ import (
 var router = gin.Default()
 
 func StartApp() {
-	session := mysql.GetSession()
-	defer session.Close()
-	handler := controllers.NewHandler(
-		services.NewTaskHandlerService(
-			tasks.NewService(
-				repository.CassandraRepo)))
+	handler := services.NewTaskHandlerService(
+		tasks.NewService(
+			repository.MysqlRepo))
+	controller := controllers.NewHandler(handler)
+	go handler.Execute()
 
-	router.POST("/task", handler.Create)
-
-	router.Run(":8082")
+	router.POST("/task", controller.Create)
+	router.Run(":8083")
 }

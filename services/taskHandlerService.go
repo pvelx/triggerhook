@@ -15,15 +15,23 @@ type TaskHandlerServiceInterface interface {
 }
 
 func NewTaskHandlerService(taskService tasks.Service) TaskHandlerServiceInterface {
-	return &taskHandlerService{taskService: taskService}
+	service := &taskHandlerService{taskService: taskService}
+	service.construct()
+	return service
 }
 
 type taskHandlerService struct {
-	taskService tasks.Service
+	taskService     tasks.Service
+	chTaskToExecute chan tasks.Task
+}
+
+func (s *taskHandlerService) construct() {
+	s.chTaskToExecute = make(chan tasks.Task, 1000000)
 }
 
 func (s *taskHandlerService) Create(task tasks.Task) {
 	s.taskService.Create(task)
+	s.chTaskToExecute <- task
 }
 
 func (s *taskHandlerService) Delete(tasks.Task) {
@@ -31,27 +39,22 @@ func (s *taskHandlerService) Delete(tasks.Task) {
 	panic("implement me")
 }
 
-func findToExecMock(queue *PriorityQueue, mut *sync.Mutex, updatedQueue chan bool) {
+func (s *taskHandlerService) findToExecMock() {
+
 	now := time.Now().Unix()
 	var idx int64 = 0
-	countOfTasks := int64(20000000)
+	countOfTasks := int64(2e+7)
 	for i := now - countOfTasks/2; i < now+countOfTasks/2; i = i + 1 {
+		s.chTaskToExecute <- tasks.Task{Id: idx, ExecTime: i}
 		idx++
-		mut.Lock()
-		queue.AddTask(&tasks.Task{Id: idx, ExecTime: i})
-		mut.Unlock()
 	}
-	updatedQueue <- true
 
 	for {
-		mut.Lock()
 		ts := time.Now().Unix()
 		con := int64(40)
 		idx++
-		queue.AddTask(&tasks.Task{Id: idx, ExecTime: ts, TakenByConnection: &con})
-		mut.Unlock()
+		s.chTaskToExecute <- tasks.Task{Id: idx, ExecTime: ts, TakenByConnection: &con}
 		time.Sleep(time.Second)
-		updatedQueue <- true
 	}
 }
 
@@ -69,7 +72,7 @@ func (s *taskHandlerService) findToExec(ch chan tasks.Task) {
 
 func (s *taskHandlerService) send(chExport chan tasks.Task) {
 	for task := range chExport {
-		if task.Id%1000000 == 0 {
+		if task.Id%1e+6 == 0 {
 			fmt.Println("Send:", task)
 		}
 		//if err != s.repo.ChangeStatusToCompleted(tasks) {
@@ -86,7 +89,20 @@ func (s *taskHandlerService) getData(sec int64) []tasks.Task {
 	return tasksToExec
 }
 
+func (s *taskHandlerService) addTaskToQueue(queue *PriorityQueue, updatedQueue chan bool, mut *sync.Mutex) {
+	for {
+		select {
+		case task := <-s.chTaskToExecute:
+			mut.Lock()
+			queue.AddTask(&task)
+			mut.Unlock()
+			updatedQueue <- true
+		}
+	}
+}
+
 func (s *taskHandlerService) Execute() {
+	chExport := make(chan tasks.Task)
 
 	//initData := s.getData(5)
 	queue := NewQueue([]tasks.Task{})
@@ -94,10 +110,11 @@ func (s *taskHandlerService) Execute() {
 	updatedQueue := make(chan bool)
 	mut := &sync.Mutex{}
 
-	chExport := make(chan tasks.Task)
-	go findToExecMock(&queue, mut, updatedQueue)
+	go s.findToExecMock()
 	go s.send(chExport)
 	//go s.findToExec(ch, queue)
+
+	go s.addTaskToQueue(&queue, updatedQueue, mut)
 
 	for {
 		var sleepTime int64

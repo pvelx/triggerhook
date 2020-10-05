@@ -32,9 +32,7 @@ func (h *handler) Create(c *gin.Context) {
 	}
 
 	task := tasks.Task{
-		NextExecTime:          taskRequest.NextExecTime,
-		PlannedQuantity:       taskRequest.PlannedQuantity,
-		FormulaCalcOfNextTask: taskRequest.FormulaCalcOfNextTask,
+		ExecTime: taskRequest.NextExecTime,
 	}
 
 	h.service.Create(task)
@@ -47,9 +45,7 @@ func (h *handler) Delete(c *gin.Context) {
 }
 
 type taskRequest struct {
-	NextExecTime          int64  `json:"next_exec_time"`
-	PlannedQuantity       int64  `json:"planned_quantity"`
-	FormulaCalcOfNextTask string `json:"formula_calc_of_next_task"`
+	NextExecTime int64 `json:"exec_time"`
 }
 
 func (tr *taskRequest) Validate() error {
