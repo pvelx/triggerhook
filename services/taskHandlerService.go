@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"github.com/VladislavPav/trigger-hook/domain/tasks"
+	"math"
 	"sync"
 	"time"
 )
@@ -30,34 +31,34 @@ func (s *taskHandlerService) Delete(tasks.Task) {
 	panic("implement me")
 }
 
-func findToExecMock(key *[]int64, queue map[int64][]tasks.Task, mut *sync.Mutex) {
+func findToExecMock(queue *PriorityQueue, mut *sync.Mutex, updatedQueue chan bool) {
 	now := time.Now().Unix()
 	var idx int64 = 0
-	countOfTasks := int64(16000000)
-	for i := now - countOfTasks/2; i < now+countOfTasks/2; i++ {
+	countOfTasks := int64(20000000)
+	for i := now - countOfTasks/2; i < now+countOfTasks/2; i = i + 1 {
 		idx++
-
 		mut.Lock()
-		_, ok := queue[i]
-		if !ok {
-			queue[i] = []tasks.Task{{Id: idx, ExecTime: i}}
-		}
-		*key = append(*key, i)
-		//sort.Slice(key, func(i int, j int) bool {
-		//	return key[i] < key[j]
-		//})
+		queue.AddTask(&tasks.Task{Id: idx, ExecTime: i})
 		mut.Unlock()
 	}
+	updatedQueue <- true
 
+	for {
+		mut.Lock()
+		ts := time.Now().Unix()
+		con := int64(40)
+		idx++
+		queue.AddTask(&tasks.Task{Id: idx, ExecTime: ts, TakenByConnection: &con})
+		mut.Unlock()
+		time.Sleep(time.Second)
+		updatedQueue <- true
+	}
 }
 
-func (s *taskHandlerService) findToExec(ch chan tasks.Task, queue map[int64][]tasks.Task) {
+func (s *taskHandlerService) findToExec(ch chan tasks.Task) {
 	var periodicity int64 = 5
 	for {
-		tasksToExec, err := s.taskService.FindToExec(periodicity * (10 / 8))
-		if err != nil {
-			fmt.Println(err)
-		}
+		tasksToExec := s.getData(periodicity * (10 / 8))
 		for _, task := range tasksToExec {
 			ch <- task
 		}
@@ -77,59 +78,63 @@ func (s *taskHandlerService) send(chExport chan tasks.Task) {
 	}
 }
 
+func (s *taskHandlerService) getData(sec int64) []tasks.Task {
+	tasksToExec, err := s.taskService.FindToExec(sec)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return tasksToExec
+}
+
 func (s *taskHandlerService) Execute() {
-	var key []int64
-	newTaskCh := make(chan tasks.Task)
+
+	//initData := s.getData(5)
+	queue := NewQueue([]tasks.Task{})
+
+	updatedQueue := make(chan bool)
 	mut := &sync.Mutex{}
-	var queue = map[int64][]tasks.Task{}
 
 	chExport := make(chan tasks.Task)
-	go findToExecMock(&key, queue, mut)
+	go findToExecMock(&queue, mut, updatedQueue)
 	go s.send(chExport)
 	//go s.findToExec(ch, queue)
 
-LOOP:
 	for {
-		var execTime int64
 		var sleepTime int64
-		if len(key) == 0 {
-			sleepTime = 1e+9
+		var task *tasks.Task
+
+		mut.Lock()
+		task = queue.GetTask()
+		mut.Unlock()
+
+		if task == nil {
+			sleepTime = math.MaxInt64
 		} else {
-			execTime := key[0]
-			sleepTime = (execTime * 1e+9) - time.Now().UnixNano()
+			sleepTime = (task.ExecTime * 1e+9) - time.Now().UnixNano()
 		}
 
 		if sleepTime > 0 {
 			timer := time.NewTimer(time.Duration(sleepTime) * time.Nanosecond)
-			fmt.Println("timer start")
+			for len(updatedQueue) > 0 {
+				<-updatedQueue
+			}
 			select {
 			case <-timer.C:
 				break
-			case task := <-newTaskCh:
+			case <-updatedQueue:
 				if !timer.Stop() {
 					<-timer.C
 				}
-				fmt.Println("added task", task)
-				break LOOP
-			}
-			fmt.Println("timer end")
-			//time.Sleep(time.Duration(sleepTime) * time.Nanosecond)
+				if task != nil {
+					mut.Lock()
+					queue.AddTask(task)
+					mut.Unlock()
+				}
 
+				continue
+			}
 		}
 
-		if len(key) > 0 {
-			execTime = key[0]
-
-			mut.Lock()
-			for _, task := range queue[execTime] {
-				chExport <- task
-			}
-			key = key[1:]
-			delete(queue, execTime)
-			mut.Unlock()
-			//fmt.Println("queue count:", len(queue))
-		} else {
-			fmt.Println("key=0", key)
-		}
+		chExport <- *task
 	}
 }
