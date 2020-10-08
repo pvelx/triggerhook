@@ -13,7 +13,7 @@ var router = gin.Default()
 func StartApp() {
 	handler := services.NewTaskHandlerService(
 		tasks.NewService(
-			repository.MysqlRepo))
+			repository.MysqlRepo), 5)
 	controller := controllers.NewHandler(handler)
 	go handler.Execute()
 

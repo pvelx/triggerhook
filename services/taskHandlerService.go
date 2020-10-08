@@ -10,12 +10,11 @@ import (
 
 type TaskHandlerServiceInterface interface {
 	Create(tasks.Task)
-	Delete(tasks.Task)
 	Execute()
 }
 
-func NewTaskHandlerService(taskService tasks.Service) TaskHandlerServiceInterface {
-	service := &taskHandlerService{taskService: taskService}
+func NewTaskHandlerService(taskService tasks.Service, timePreload int64) TaskHandlerServiceInterface {
+	service := &taskHandlerService{taskService: taskService, timePreload: timePreload}
 	service.construct()
 	return service
 }
@@ -23,6 +22,7 @@ func NewTaskHandlerService(taskService tasks.Service) TaskHandlerServiceInterfac
 type taskHandlerService struct {
 	taskService     tasks.Service
 	chTaskToExecute chan tasks.Task
+	timePreload     int64
 }
 
 func (s *taskHandlerService) construct() {
@@ -30,13 +30,14 @@ func (s *taskHandlerService) construct() {
 }
 
 func (s *taskHandlerService) Create(task tasks.Task) {
-	s.taskService.Create(task)
-	s.chTaskToExecute <- task
-}
+	relativeTimeToExec := task.ExecTime - time.Now().Unix()
+	isTaken := false
+	if s.timePreload > relativeTimeToExec {
+		s.chTaskToExecute <- task
+		isTaken = true
+	}
 
-func (s *taskHandlerService) Delete(tasks.Task) {
-
-	panic("implement me")
+	s.taskService.Create(task, isTaken)
 }
 
 func (s *taskHandlerService) findToExecMock() {
@@ -59,14 +60,13 @@ func (s *taskHandlerService) findToExecMock() {
 }
 
 func (s *taskHandlerService) findToExec(ch chan tasks.Task) {
-	var periodicity int64 = 5
 	for {
-		tasksToExec := s.getData(periodicity * (10 / 8))
+		tasksToExec := s.getData(s.timePreload / 2)
 		for _, task := range tasksToExec {
 			ch <- task
 		}
 
-		time.Sleep(time.Duration(periodicity) * time.Second)
+		time.Sleep(time.Duration(s.timePreload) * time.Second)
 	}
 }
 

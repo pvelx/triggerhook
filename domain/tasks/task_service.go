@@ -6,14 +6,13 @@ import (
 )
 
 type RepositoryInterface interface {
-	Create(task *Task) *utils.ErrorRepo
-	Delete(task Task) *utils.ErrorRepo
+	Create(task *Task, isTaken bool) *utils.ErrorRepo
 	FindBySecToExecTime(secToNow int64) (Tasks, *utils.ErrorRepo)
 	ChangeStatusToCompleted(*Task) *utils.ErrorRepo
 }
 
 type Service interface {
-	Create(Task) (*Task, *error)
+	Create(task Task, isTaken bool) (*Task, *error)
 	Delete(Task) (*Task, *error)
 	UpdateTask(Task) (*Task, *error)
 	FindToExec(secToLaunch int64) (Tasks, error)
@@ -30,8 +29,8 @@ type service struct {
 	repo RepositoryInterface
 }
 
-func (s *service) Create(task Task) (*Task, *error) {
-	if err := s.repo.Create(&task); err != nil {
+func (s *service) Create(task Task, isTaken bool) (*Task, *error) {
+	if err := s.repo.Create(&task, isTaken); err != nil {
 		err := errors.New(err.Error())
 		return nil, &err
 	}

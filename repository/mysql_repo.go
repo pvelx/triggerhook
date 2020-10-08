@@ -12,11 +12,11 @@ import (
 	"time"
 )
 
-const apiDbLayout = "2006-01-02 15:04:05"
-
 var MysqlRepo RepositoryInterface = &mysqlRepo{}
 
-const queryCreateTask = "INSERT INTO task (exec_time, taken_by_connection, status) VALUES (?, CONNECTION_ID(), ?);"
+const queryCreateTask = "INSERT INTO task (exec_time, status) VALUES (?, ?);"
+const queryCreateTaskTaken = "INSERT INTO task (exec_time, taken_by_connection, status) VALUES (?, CONNECTION_ID(), ?);"
+
 const queryFindBySecToExecTime = `SELECT id, exec_time, taken_by_connection, status 
 	FROM task
 	WHERE status = ? 
@@ -30,23 +30,26 @@ const queryFindBySecToExecTime = `SELECT id, exec_time, taken_by_connection, sta
 const queryLockTasks = "UPDATE task SET taken_by_connection = CONNECTION_ID() WHERE id IN(?)"
 
 type RepositoryInterface interface {
-	Create(task *tasks.Task) *utils.ErrorRepo
-	Delete(task tasks.Task) *utils.ErrorRepo
+	Create(task *tasks.Task, isTaken bool) *utils.ErrorRepo
 	FindBySecToExecTime(secToNow int64) (tasks.Tasks, *utils.ErrorRepo)
 	ChangeStatusToCompleted(*tasks.Task) *utils.ErrorRepo
 }
 
 type mysqlRepo struct{}
 
-func (mysqlRepo) Create(task *tasks.Task) *utils.ErrorRepo {
-	stmt, err := mysql.Client.Prepare(queryCreateTask)
+func (mysqlRepo) Create(task *tasks.Task, isTaken bool) *utils.ErrorRepo {
+	query := queryCreateTask
+	if isTaken {
+		query = queryCreateTaskTaken
+	}
+	stmt, err := mysql.Client.Prepare(query)
 	if err != nil {
 		//logger.Error("Error when trying to prepare save statement", err)
 		return utils.NewErrorRepo("database error", err)
 	}
 	defer stmt.Close()
 
-	insertResult, saveErr := stmt.Exec(task.ExecTime, task.TakenByConnection, task.Status)
+	insertResult, saveErr := stmt.Exec(task.ExecTime, task.Status)
 
 	if saveErr != nil {
 		//logger.Error("Error when trying to save", err)
@@ -61,10 +64,6 @@ func (mysqlRepo) Create(task *tasks.Task) *utils.ErrorRepo {
 	task.Id = taskId
 
 	return nil
-}
-
-func (mysqlRepo) Delete(task tasks.Task) *utils.ErrorRepo {
-	panic("implement me")
 }
 
 func (mysqlRepo) ChangeStatusToCompleted(task *tasks.Task) *utils.ErrorRepo {
