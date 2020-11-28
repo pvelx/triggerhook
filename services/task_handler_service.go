@@ -3,6 +3,8 @@ package services
 import (
 	"fmt"
 	"github.com/VladislavPav/trigger-hook/domain/tasks"
+	"github.com/VladislavPav/trigger-hook/services/structures"
+	"github.com/VladislavPav/trigger-hook/services/structures/task_queue_heap"
 	"math"
 	"sync"
 	"time"
@@ -89,12 +91,12 @@ func (s *taskHandlerService) getData(sec int64) []tasks.Task {
 	return tasksToExec
 }
 
-func (s *taskHandlerService) addTaskToQueue(queue *PriorityQueue, updatedQueue chan bool, mut *sync.Mutex) {
+func (s *taskHandlerService) addTaskToQueue(queue structures.TaskQueueInterface, updatedQueue chan bool, mut *sync.Mutex) {
 	for {
 		select {
 		case task := <-s.chTaskToExecute:
 			mut.Lock()
-			queue.AddTask(&task)
+			queue.Offer(&task)
 			mut.Unlock()
 			updatedQueue <- true
 		}
@@ -105,7 +107,7 @@ func (s *taskHandlerService) Execute() {
 	chExport := make(chan tasks.Task)
 
 	//initData := s.getData(5)
-	queue := NewQueue([]tasks.Task{})
+	queue := task_queue_heap.NewTaskQueueHeap([]tasks.Task{})
 
 	updatedQueue := make(chan bool)
 	mut := &sync.Mutex{}
@@ -114,14 +116,14 @@ func (s *taskHandlerService) Execute() {
 	go s.send(chExport)
 	//go s.findToExec(ch, queue)
 
-	go s.addTaskToQueue(&queue, updatedQueue, mut)
+	go s.addTaskToQueue(queue, updatedQueue, mut)
 
 	for {
 		var sleepTime int64
 		var task *tasks.Task
 
 		mut.Lock()
-		task = queue.GetTask()
+		task = queue.Poll()
 		mut.Unlock()
 
 		if task == nil {
@@ -144,7 +146,7 @@ func (s *taskHandlerService) Execute() {
 				}
 				if task != nil {
 					mut.Lock()
-					queue.AddTask(task)
+					queue.Offer(task)
 					mut.Unlock()
 				}
 
