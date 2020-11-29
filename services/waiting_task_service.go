@@ -2,20 +2,16 @@ package services
 
 import (
 	"github.com/VladislavPav/trigger-hook/contracts"
-	"github.com/VladislavPav/trigger-hook/domain/tasks"
-	"github.com/VladislavPav/trigger-hook/services/structures/task_queue_heap"
+	"github.com/VladislavPav/trigger-hook/domain"
+	"github.com/VladislavPav/trigger-hook/prioritized_task_list"
 	"math"
 	"sync"
 	"time"
 )
 
-type TaskHandlerServiceInterface interface {
-	WaitUntilExecTime()
-}
-
-func NewTaskHandlerService(chPreloadedTask chan tasks.Task, chTasksReadyToSend chan tasks.Task) TaskHandlerServiceInterface {
-	service := &taskHandlerService{
-		tasksWaitingList:   task_queue_heap.NewTaskQueueHeap([]tasks.Task{}),
+func NewWaitingTaskService(chPreloadedTask chan domain.Task, chTasksReadyToSend chan domain.Task) contracts.WaitingTaskServiceInterface {
+	service := &waitingTaskService{
+		tasksWaitingList:   prioritized_task_list.NewTaskQueueHeap([]domain.Task{}),
 		chPreloadedTask:    chPreloadedTask,
 		chTasksReadyToSend: chTasksReadyToSend,
 		mu:                 &sync.Mutex{},
@@ -24,26 +20,26 @@ func NewTaskHandlerService(chPreloadedTask chan tasks.Task, chTasksReadyToSend c
 	return service
 }
 
-type taskHandlerService struct {
-	tasksWaitingList   contracts.TasksWaitingListInterface
-	chPreloadedTask    chan tasks.Task
-	chTasksReadyToSend chan tasks.Task
+type waitingTaskService struct {
+	tasksWaitingList   contracts.PrioritizedTaskListInterface
+	chPreloadedTask    chan domain.Task
+	chTasksReadyToSend chan domain.Task
 	mu                 *sync.Mutex
 }
 
-func (s *taskHandlerService) addTaskToWaitingList(task *tasks.Task) {
+func (s *waitingTaskService) addTaskToWaitingList(task *domain.Task) {
 	s.mu.Lock()
 	defer func() { s.mu.Unlock() }()
 	s.tasksWaitingList.Add(task)
 }
 
-func (s *taskHandlerService) takeTaskFromWaitingList() *tasks.Task {
+func (s *waitingTaskService) takeTaskFromWaitingList() *domain.Task {
 	s.mu.Lock()
 	defer func() { s.mu.Unlock() }()
 	return s.tasksWaitingList.Take()
 }
 
-func (s *taskHandlerService) WaitUntilExecTime() {
+func (s *waitingTaskService) WaitUntilExecTime() {
 	updatedQueue := make(chan bool)
 
 	go func() {

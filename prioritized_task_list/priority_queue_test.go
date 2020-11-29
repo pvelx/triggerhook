@@ -1,9 +1,9 @@
-package structures
+package prioritized_task_list
 
 import (
 	"container/heap"
 	"fmt"
-	"github.com/VladislavPav/trigger-hook/domain/tasks"
+	"github.com/VladislavPav/trigger-hook/domain"
 	"math/rand"
 	"testing"
 	"time"
@@ -34,7 +34,7 @@ func TestName(t *testing.T) {
 	//	//fmt.Println(*f)
 	//}
 
-	task := tasks.Task{
+	task := domain.Task{
 		Id:       120,
 		ExecTime: 3,
 	}
@@ -50,14 +50,14 @@ func TestName(t *testing.T) {
 	}
 }
 
-func data() []tasks.Task {
+func data() []domain.Task {
 	//now := time.Now().Unix()
 	var idx int64 = 100
 	countOfTasks := 10
-	var queue []tasks.Task
+	var queue []domain.Task
 	for i := 0; i < countOfTasks; i++ {
 		idx++
-		queue = append(queue, tasks.Task{Id: idx, ExecTime: int64(i)})
+		queue = append(queue, domain.Task{Id: idx, ExecTime: int64(i)})
 	}
 
 	rand.Seed(time.Now().UnixNano())

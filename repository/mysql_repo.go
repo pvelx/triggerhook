@@ -3,8 +3,9 @@ package repository
 import (
 	"context"
 	"fmt"
-	"github.com/VladislavPav/trigger-hook/clients/mysql"
-	"github.com/VladislavPav/trigger-hook/domain/tasks"
+	"github.com/VladislavPav/trigger-hook/clients"
+	"github.com/VladislavPav/trigger-hook/contracts"
+	"github.com/VladislavPav/trigger-hook/domain"
 	"github.com/VladislavPav/trigger-hook/utils"
 	"log"
 	"strconv"
@@ -12,7 +13,7 @@ import (
 	"time"
 )
 
-var MysqlRepo RepositoryInterface = &mysqlRepo{}
+var MysqlRepo contracts.RepositoryInterface = &mysqlRepo{}
 
 const queryCreateTask = "INSERT INTO task (exec_time, status) VALUES (?, ?);"
 const queryCreateTaskTaken = "INSERT INTO task (exec_time, taken_by_connection, status) VALUES (?, CONNECTION_ID(), ?);"
@@ -29,20 +30,14 @@ const queryFindBySecToExecTime = `SELECT id, exec_time, taken_by_connection, sta
 		)`
 const queryLockTasks = "UPDATE task SET taken_by_connection = CONNECTION_ID() WHERE id IN(?)"
 
-type RepositoryInterface interface {
-	Create(task *tasks.Task, isTaken bool) *utils.ErrorRepo
-	FindBySecToExecTime(secToNow int64) (tasks.Tasks, *utils.ErrorRepo)
-	ChangeStatusToCompleted(*tasks.Task) *utils.ErrorRepo
-}
-
 type mysqlRepo struct{}
 
-func (mysqlRepo) Create(task *tasks.Task, isTaken bool) *utils.ErrorRepo {
+func (mysqlRepo) Create(task *domain.Task, isTaken bool) *utils.ErrorRepo {
 	query := queryCreateTask
 	if isTaken {
 		query = queryCreateTaskTaken
 	}
-	stmt, err := mysql.Client.Prepare(query)
+	stmt, err := clients.Client.Prepare(query)
 	if err != nil {
 		//logger.Error("Error when trying to prepare save statement", err)
 		return utils.NewErrorRepo("database error", err)
@@ -66,14 +61,14 @@ func (mysqlRepo) Create(task *tasks.Task, isTaken bool) *utils.ErrorRepo {
 	return nil
 }
 
-func (mysqlRepo) ChangeStatusToCompleted(task *tasks.Task) *utils.ErrorRepo {
-	stmt, err := mysql.Client.Prepare("UPDATE task SET status = ? WHERE status = ? AND id = ? taken_by_connection = CONNECTION_ID()")
+func (mysqlRepo) ChangeStatusToCompleted(task *domain.Task) *utils.ErrorRepo {
+	stmt, err := clients.Client.Prepare("UPDATE task SET status = ? WHERE status = ? AND id = ? taken_by_connection = CONNECTION_ID()")
 	if err != nil {
 		return utils.NewErrorRepo("database error", err)
 	}
 	defer stmt.Close()
 
-	_, updateErr := stmt.Exec(tasks.StatusCompleted, tasks.StatusAwaiting, task.Id)
+	_, updateErr := stmt.Exec(domain.StatusCompleted, domain.StatusAwaiting, task.Id)
 
 	if updateErr != nil {
 		return utils.NewErrorRepo("database error", updateErr)
@@ -82,23 +77,23 @@ func (mysqlRepo) ChangeStatusToCompleted(task *tasks.Task) *utils.ErrorRepo {
 	return nil
 }
 
-func (mysqlRepo) FindBySecToExecTime(secToNow int64) (tasks.Tasks, *utils.ErrorRepo) {
+func (mysqlRepo) FindBySecToExecTime(secToNow int64) (domain.Tasks, *utils.ErrorRepo) {
 	toNextExecTime := time.Now().Add(time.Duration(secToNow) * time.Second).Unix()
 	ctx := context.Background()
-	tx, err := mysql.Client.BeginTx(ctx, nil)
+	tx, err := clients.Client.BeginTx(ctx, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	resultTasks, errExec := tx.Query(queryFindBySecToExecTime, tasks.StatusAwaiting, toNextExecTime)
+	resultTasks, errExec := tx.Query(queryFindBySecToExecTime, domain.StatusAwaiting, toNextExecTime)
 	if errExec != nil {
 		tx.Rollback()
 		fmt.Println("\n", (errExec), "\n ....Transaction rollback!\n")
 		return nil, utils.NewErrorRepo("database error", errExec)
 	}
 	var ids []string
-	results := make(tasks.Tasks, 0)
+	results := make(domain.Tasks, 0)
 	for resultTasks.Next() {
-		var task tasks.Task
+		var task domain.Task
 		if getErr := resultTasks.Scan(&task.Id, &task.ExecTime, &task.TakenByConnection, &task.Status); getErr != nil {
 			return nil, utils.NewErrorRepo("database error", getErr)
 		}

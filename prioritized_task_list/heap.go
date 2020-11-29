@@ -1,11 +1,9 @@
-package task_queue_heap
-
-import "github.com/VladislavPav/trigger-hook/domain/tasks"
+package prioritized_task_list
 
 type priorityQueue []*item
 
 type item struct {
-	task     tasks.Task
+	task     interface{}
 	priority int64
 	index    int
 }

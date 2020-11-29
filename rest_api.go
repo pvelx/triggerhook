@@ -1,13 +1,12 @@
 package main
 
 import (
-	"github.com/VladislavPav/trigger-hook/app"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
 
 var router = gin.Default()
-var scheduler = app.Default()
+var scheduler = Default()
 
 func main() {
 

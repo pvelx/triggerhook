@@ -3,27 +3,47 @@ package services
 import (
 	"fmt"
 	"github.com/VladislavPav/trigger-hook/contracts"
-	"github.com/VladislavPav/trigger-hook/domain/tasks"
+	"github.com/VladislavPav/trigger-hook/domain"
 )
 
-type taskSender struct {
-	contracts.TaskSenderInterface
-	chTasksReadyToSend chan tasks.Task
-}
-
-func NewTaskSender(chTasksReadyToSend chan tasks.Task) contracts.TaskSenderInterface {
+func NewTaskSender(
+	taskManager contracts.TaskManagerInterface,
+	transport contracts.SendingTransportInterface,
+	chTasksReadyToSend chan domain.Task,
+) contracts.TaskSenderInterface {
 	return &taskSender{
+		taskManager:        taskManager,
+		transport:          transport,
+		chTasksToConfirm:   make(chan domain.Task, 10000),
 		chTasksReadyToSend: chTasksReadyToSend,
 	}
 }
 
+type taskSender struct {
+	contracts.TaskSenderInterface
+	transport          contracts.SendingTransportInterface
+	chTasksReadyToSend chan domain.Task
+	chTasksToConfirm   chan domain.Task
+	taskManager        contracts.TaskManagerInterface
+}
+
 func (s *taskSender) Send() {
+	go s.confirm()
 	for task := range s.chTasksReadyToSend {
-		if task.Id%1e+6 == 0 {
-			fmt.Println("Send:", task)
+		if s.transport.Send(&task) {
+			s.chTasksToConfirm <- task
 		}
-		//if err != s.repo.ChangeStatusToCompleted(tasks) {
-		//	return nil, errors.New(err.Error())
+	}
+}
+
+func (s *taskSender) confirm() {
+	for task := range s.chTasksToConfirm {
+		if task.Id%1e+6 == 0 {
+			fmt.Println("confirmed:", task)
+		}
+
+		//if err := s.taskManager.ConfirmExecution(&task); err != nil {
+		//	panic(err)
 		//}
 	}
 }
