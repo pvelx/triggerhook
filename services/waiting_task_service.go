@@ -9,9 +9,12 @@ import (
 	"time"
 )
 
-func NewWaitingTaskService(chPreloadedTask chan domain.Task, chTasksReadyToSend chan domain.Task) contracts.WaitingTaskServiceInterface {
+func NewWaitingTaskService(
+	chPreloadedTask chan domain.Task,
+	chTasksReadyToSend chan domain.Task,
+) contracts.WaitingTaskServiceInterface {
 	service := &waitingTaskService{
-		tasksWaitingList:   prioritized_task_list.NewTaskQueueHeap([]domain.Task{}),
+		tasksWaitingList:   prioritized_task_list.NewHeapPrioritizedTaskList([]domain.Task{}),
 		chPreloadedTask:    chPreloadedTask,
 		chTasksReadyToSend: chTasksReadyToSend,
 		mu:                 &sync.Mutex{},
