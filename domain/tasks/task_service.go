@@ -3,6 +3,7 @@ package tasks
 import (
 	"errors"
 	"github.com/VladislavPav/trigger-hook/utils"
+	"time"
 )
 
 type RepositoryInterface interface {
@@ -12,52 +13,73 @@ type RepositoryInterface interface {
 }
 
 type Service interface {
-	Create(task Task, isTaken bool) (*Task, *error)
-	Delete(Task) (*Task, *error)
-	UpdateTask(Task) (*Task, *error)
-	FindToExec(secToLaunch int64) (Tasks, error)
-	UpdateNextExecTime(Task) ([]*Task, *error)
+	Create(execTime int64) (*Task, *error)
+	Preload()
 }
 
-func NewService(repo RepositoryInterface) Service {
+func NewService(repo RepositoryInterface, chPreloadedTask chan Task) Service {
 	return &service{
-		repo: repo,
+		repo:            repo,
+		chPreloadedTask: chPreloadedTask,
+		timePreload:     5,
 	}
 }
 
 type service struct {
-	repo RepositoryInterface
+	repo            RepositoryInterface
+	chPreloadedTask chan Task
+	timePreload     int64
 }
 
-func (s *service) Create(task Task, isTaken bool) (*Task, *error) {
+func (s *service) Create(execTime int64) (*Task, *error) {
+	task := Task{
+		ExecTime: execTime,
+	}
+	relativeTimeToExec := execTime - time.Now().Unix()
+	isTaken := false
+	if s.timePreload > relativeTimeToExec {
+		isTaken = true
+	}
 	if err := s.repo.Create(&task, isTaken); err != nil {
 		err := errors.New(err.Error())
 		return nil, &err
 	}
+	if isTaken {
+		s.chPreloadedTask <- task
+	}
 	return &task, nil
 }
 
-func (s *service) Delete(task Task) (*Task, *error) {
-
-	return nil, nil
-}
-
-func (s *service) FindToExec(secToLaunch int64) (Tasks, error) {
-
-	tasks, err := s.repo.FindBySecToExecTime(secToLaunch)
-	if err != nil {
-		return nil, errors.New(err.Error())
+func (s *service) findToExecMock() {
+	now := time.Now().Unix()
+	var idx int64 = 0
+	countOfTasks := int64(2e+7)
+	for i := now - countOfTasks/2; i < now+countOfTasks/2; i = i + 1 {
+		s.chPreloadedTask <- Task{Id: idx, ExecTime: i}
+		idx++
 	}
 
-	return tasks, nil
+	for {
+		ts := time.Now().Unix()
+		con := int64(40)
+		idx++
+		s.chPreloadedTask <- Task{Id: idx, ExecTime: ts, TakenByConnection: &con}
+		time.Sleep(time.Second)
+	}
 }
 
-func (s *service) UpdateTask(task Task) (*Task, *error) {
+func (s *service) Preload() {
+	go s.findToExecMock()
 
-	return nil, nil
-}
-
-func (s *service) UpdateNextExecTime(task Task) ([]*Task, *error) {
-
-	return nil, nil
+	//for {
+	//	tasksToExec, err := s.repo.FindBySecToExecTime(s.timePreload / 2)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	for _, task := range tasksToExec {
+	//		s.chPreloadedTask <- task
+	//	}
+	//
+	//	time.Sleep(time.Duration(s.timePreload) * time.Second)
+	//}
 }

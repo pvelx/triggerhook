@@ -1,22 +1,45 @@
 package app
 
 import (
-	"github.com/VladislavPav/trigger-hook/controllers"
+	"github.com/VladislavPav/trigger-hook/contracts"
 	"github.com/VladislavPav/trigger-hook/domain/tasks"
 	"github.com/VladislavPav/trigger-hook/repository"
 	"github.com/VladislavPav/trigger-hook/services"
-	"github.com/gin-gonic/gin"
 )
 
-var router = gin.Default()
+type SchedulerInterface interface {
+	Create(execTime int64) (*tasks.Task, *error)
+	Run()
+}
 
-func StartApp() {
-	handler := services.NewTaskHandlerService(
-		tasks.NewService(
-			repository.MysqlRepo), 5)
-	controller := controllers.NewHandler(handler)
-	go handler.Execute()
+func Default() *Scheduler {
+	chPreloadedTasks := make(chan tasks.Task, 1000000)
+	chTasksReadyToSend := make(chan tasks.Task, 1000000)
 
-	router.POST("/task", controller.Create)
-	router.Run(":8083")
+	return &Scheduler{
+		chPreloadedTasks:   chPreloadedTasks,
+		chTasksReadyToSend: chTasksReadyToSend,
+		taskService:        tasks.NewService(repository.MysqlRepo, chPreloadedTasks),
+		expectantService:   services.NewTaskHandlerService(chPreloadedTasks, chTasksReadyToSend),
+		senderService:      services.NewTaskSender(chTasksReadyToSend),
+	}
+}
+
+type Scheduler struct {
+	SchedulerInterface
+	chPreloadedTasks   chan tasks.Task
+	chTasksReadyToSend chan tasks.Task
+	expectantService   services.TaskHandlerServiceInterface
+	taskService        tasks.Service
+	senderService      contracts.TaskSenderInterface
+}
+
+func (s *Scheduler) Create(execTime int64) (*tasks.Task, *error) {
+	return s.taskService.Create(execTime)
+}
+
+func (s *Scheduler) Run() {
+	go s.taskService.Preload()
+	go s.senderService.Send()
+	s.expectantService.WaitUntilExecTime()
 }
