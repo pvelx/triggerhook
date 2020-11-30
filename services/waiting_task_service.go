@@ -10,8 +10,8 @@ import (
 )
 
 func NewWaitingTaskService(
-	chPreloadedTask chan domain.Task,
-	chTasksReadyToSend chan domain.Task,
+	chPreloadedTask <-chan domain.Task,
+	chTasksReadyToSend chan<- domain.Task,
 ) contracts.WaitingTaskServiceInterface {
 	service := &waitingTaskService{
 		tasksWaitingList:   prioritized_task_list.NewHeapPrioritizedTaskList([]domain.Task{}),
@@ -25,8 +25,8 @@ func NewWaitingTaskService(
 
 type waitingTaskService struct {
 	tasksWaitingList   contracts.PrioritizedTaskListInterface
-	chPreloadedTask    chan domain.Task
-	chTasksReadyToSend chan domain.Task
+	chPreloadedTask    <-chan domain.Task
+	chTasksReadyToSend chan<- domain.Task
 	mu                 *sync.Mutex
 }
 
@@ -48,9 +48,13 @@ func (s *waitingTaskService) WaitUntilExecTime() {
 	go func() {
 		for {
 			select {
-			case task := <-s.chPreloadedTask:
-				s.addTaskToWaitingList(&task)
-				updatedQueue <- true
+			case task, ok := <-s.chPreloadedTask:
+				if ok {
+					s.addTaskToWaitingList(&task)
+					updatedQueue <- true
+				} else {
+					panic("chan was closed")
+				}
 			}
 		}
 	}()

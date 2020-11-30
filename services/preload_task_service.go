@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func NewPreloadingTaskService(tm contracts.TaskManagerInterface, chPreloadedTask chan domain.Task) contracts.PreloadingTaskServiceInterface {
+func NewPreloadingTaskService(tm contracts.TaskManagerInterface, chPreloadedTask chan<- domain.Task) contracts.PreloadingTaskServiceInterface {
 	return &preloadingTaskService{
 		taskManager:     tm,
 		chPreloadedTask: chPreloadedTask,
@@ -16,7 +16,7 @@ func NewPreloadingTaskService(tm contracts.TaskManagerInterface, chPreloadedTask
 
 type preloadingTaskService struct {
 	taskManager     contracts.TaskManagerInterface
-	chPreloadedTask chan domain.Task
+	chPreloadedTask chan<- domain.Task
 	timePreload     int64
 }
 

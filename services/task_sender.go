@@ -9,7 +9,7 @@ import (
 func NewTaskSender(
 	taskManager contracts.TaskManagerInterface,
 	transport contracts.SendingTransportInterface,
-	chTasksReadyToSend chan domain.Task,
+	chTasksReadyToSend <-chan domain.Task,
 ) contracts.TaskSenderInterface {
 	return &taskSender{
 		taskManager:        taskManager,
@@ -22,7 +22,7 @@ func NewTaskSender(
 type taskSender struct {
 	contracts.TaskSenderInterface
 	transport          contracts.SendingTransportInterface
-	chTasksReadyToSend chan domain.Task
+	chTasksReadyToSend <-chan domain.Task
 	chTasksToConfirm   chan domain.Task
 	taskManager        contracts.TaskManagerInterface
 }
