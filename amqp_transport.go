@@ -1,4 +1,4 @@
-package transport
+package main
 
 import (
 	"github.com/VladislavPav/trigger-hook/contracts"

@@ -39,7 +39,6 @@ func Test(t *testing.T) {
 		for {
 			select {
 			case task := <-chTasksReadyToSend:
-				//fmt.Println(".", actualCountOfTasks)
 				now := time.Now().Unix()
 				assert.True(
 					t,

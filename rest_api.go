@@ -10,6 +10,7 @@ var scheduler = Default()
 
 func main() {
 
+	scheduler.SetTransport(NewTransportAmqp())
 	go scheduler.Run()
 
 	router.POST("/task", func(c *gin.Context) {

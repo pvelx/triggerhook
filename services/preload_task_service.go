@@ -59,15 +59,12 @@ func (s *preloadingTaskService) findToExecMock() {
 func (s *preloadingTaskService) Preload() {
 	go s.findToExecMock()
 
-	//for {
-	//	tasksToExec, err := s.taskManager.FindBySecToExecTime(s.timePreload / 2)
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//	for _, task := range tasksToExec {
-	//		s.chPreloadedTask <- task
-	//	}
-	//
-	//	time.Sleep(time.Duration(s.timePreload) * time.Second)
-	//}
+	for {
+		tasksToExec := s.taskManager.GetTasksBySecToExecTime(s.timePreload)
+		for _, task := range tasksToExec {
+			s.chPreloadedTask <- task
+		}
+
+		time.Sleep(time.Duration(s.timePreload) * time.Second)
+	}
 }

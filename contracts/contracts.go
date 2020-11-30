@@ -10,12 +10,13 @@ type PrioritizedTaskListInterface interface {
 	Take() *domain.Task
 }
 
-type TaskSenderInterface interface {
-	Send()
-}
-
 type SendingTransportInterface interface {
 	Send(task *domain.Task) bool
+}
+
+type TaskSenderInterface interface {
+	Send()
+	SetTransport(transport SendingTransportInterface)
 }
 
 type TaskManagerInterface interface {
@@ -41,5 +42,6 @@ type WaitingTaskServiceInterface interface {
 
 type SchedulerInterface interface {
 	Create(execTime int64) (*domain.Task, *error)
+	SetTransport(transport SendingTransportInterface)
 	Run()
 }

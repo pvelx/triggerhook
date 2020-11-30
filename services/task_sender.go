@@ -8,12 +8,10 @@ import (
 
 func NewTaskSender(
 	taskManager contracts.TaskManagerInterface,
-	transport contracts.SendingTransportInterface,
 	chTasksReadyToSend <-chan domain.Task,
 ) contracts.TaskSenderInterface {
 	return &taskSender{
 		taskManager:        taskManager,
-		transport:          transport,
 		chTasksToConfirm:   make(chan domain.Task, 10000),
 		chTasksReadyToSend: chTasksReadyToSend,
 	}
@@ -27,7 +25,14 @@ type taskSender struct {
 	taskManager        contracts.TaskManagerInterface
 }
 
+func (s *taskSender) SetTransport(transport contracts.SendingTransportInterface) {
+	s.transport = transport
+}
+
 func (s *taskSender) Send() {
+	if s.transport == nil {
+		panic("Transport for sending was not added")
+	}
 	go s.confirm()
 	for task := range s.chTasksReadyToSend {
 		if s.transport.Send(&task) {

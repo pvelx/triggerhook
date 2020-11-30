@@ -5,17 +5,15 @@ import (
 	"github.com/VladislavPav/trigger-hook/domain"
 	"github.com/VladislavPav/trigger-hook/repository"
 	"github.com/VladislavPav/trigger-hook/services"
-	"github.com/VladislavPav/trigger-hook/transport"
 )
 
 func Default() *Scheduler {
 	chPreloadedTasks := make(chan domain.Task, 1000000)
 	chTasksReadyToSend := make(chan domain.Task, 1000000)
-	amqpTransport := transport.NewTransportAmqp()
 	taskManager := services.NewTaskManager(repository.MysqlRepo)
 	preloadingTaskService := services.NewPreloadingTaskService(taskManager, chPreloadedTasks)
 	waitingTaskService := services.NewWaitingTaskService(chPreloadedTasks, chTasksReadyToSend)
-	senderService := services.NewTaskSender(taskManager, amqpTransport, chTasksReadyToSend)
+	senderService := services.NewTaskSender(taskManager, chTasksReadyToSend)
 
 	return &Scheduler{
 		chPreloadedTasks,
@@ -32,6 +30,10 @@ type Scheduler struct {
 	waitingTaskService    contracts.WaitingTaskServiceInterface
 	preloadingTaskService contracts.PreloadingTaskServiceInterface
 	senderService         contracts.TaskSenderInterface
+}
+
+func (s *Scheduler) SetTransport(transport contracts.SendingTransportInterface) {
+	s.senderService.SetTransport(transport)
 }
 
 func (s *Scheduler) Create(execTime int64) (*domain.Task, *error) {
