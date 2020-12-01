@@ -1,4 +1,4 @@
-package main
+package trigger_hook
 
 import (
 	"github.com/VladislavPav/trigger-hook/contracts"
