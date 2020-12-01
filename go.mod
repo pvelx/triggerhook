@@ -1,4 +1,4 @@
-module github.com/VladislavPav/trigger-hook
+module github.com/pvelx/triggerHook
 
 go 1.15
 

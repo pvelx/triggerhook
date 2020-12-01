@@ -2,8 +2,8 @@ package services
 
 import (
 	"fmt"
-	"github.com/VladislavPav/trigger-hook/contracts"
-	"github.com/VladislavPav/trigger-hook/domain"
+	"github.com/pvelx/triggerHook/contracts"
+	"github.com/pvelx/triggerHook/domain"
 )
 
 func NewTaskSender(

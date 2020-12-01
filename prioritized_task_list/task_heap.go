@@ -2,8 +2,8 @@ package prioritized_task_list
 
 import (
 	"container/heap"
-	"github.com/VladislavPav/trigger-hook/contracts"
-	"github.com/VladislavPav/trigger-hook/domain"
+	"github.com/pvelx/triggerHook/contracts"
+	"github.com/pvelx/triggerHook/domain"
 )
 
 func NewHeapPrioritizedTaskList(tasks []domain.Task) contracts.PrioritizedTaskListInterface {

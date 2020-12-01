@@ -2,9 +2,9 @@ package services
 
 import (
 	"errors"
-	"github.com/VladislavPav/trigger-hook/contracts"
-	"github.com/VladislavPav/trigger-hook/domain"
-	"github.com/VladislavPav/trigger-hook/utils"
+	"github.com/pvelx/triggerHook/contracts"
+	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/utils"
 )
 
 func NewTaskManager(repo contracts.RepositoryInterface) contracts.TaskManagerInterface {

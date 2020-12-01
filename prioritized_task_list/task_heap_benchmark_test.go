@@ -1,7 +1,7 @@
 package prioritized_task_list
 
 import (
-	"github.com/VladislavPav/trigger-hook/domain"
+	"github.com/pvelx/triggerHook/domain"
 	"math/rand"
 	"testing"
 	"time"

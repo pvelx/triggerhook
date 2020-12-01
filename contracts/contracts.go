@@ -1,8 +1,8 @@
 package contracts
 
 import (
-	"github.com/VladislavPav/trigger-hook/domain"
-	"github.com/VladislavPav/trigger-hook/utils"
+	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/utils"
 )
 
 type PrioritizedTaskListInterface interface {

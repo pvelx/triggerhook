@@ -1,9 +1,9 @@
 package services
 
 import (
-	"github.com/VladislavPav/trigger-hook/contracts"
-	"github.com/VladislavPav/trigger-hook/domain"
-	"github.com/VladislavPav/trigger-hook/prioritized_task_list"
+	"github.com/pvelx/triggerHook/contracts"
+	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/prioritized_task_list"
 	"math"
 	"sync"
 	"time"

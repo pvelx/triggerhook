@@ -1,10 +1,10 @@
-package trigger_hook
+package triggerHook
 
 import (
-	"github.com/VladislavPav/trigger-hook/contracts"
-	"github.com/VladislavPav/trigger-hook/domain"
-	"github.com/VladislavPav/trigger-hook/repository"
-	"github.com/VladislavPav/trigger-hook/services"
+	"github.com/pvelx/triggerHook/contracts"
+	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/repository"
+	"github.com/pvelx/triggerHook/services"
 )
 
 func Default() *Scheduler {

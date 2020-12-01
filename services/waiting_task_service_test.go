@@ -2,7 +2,7 @@ package services
 
 import (
 	"fmt"
-	"github.com/VladislavPav/trigger-hook/domain"
+	"github.com/pvelx/triggerHook/domain"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"

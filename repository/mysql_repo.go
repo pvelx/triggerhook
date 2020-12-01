@@ -2,10 +2,10 @@ package repository
 
 import (
 	"context"
-	"github.com/VladislavPav/trigger-hook/clients"
-	"github.com/VladislavPav/trigger-hook/contracts"
-	"github.com/VladislavPav/trigger-hook/domain"
-	"github.com/VladislavPav/trigger-hook/utils"
+	"github.com/pvelx/triggerHook/clients"
+	"github.com/pvelx/triggerHook/contracts"
+	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/utils"
 	"log"
 	"strings"
 	"time"

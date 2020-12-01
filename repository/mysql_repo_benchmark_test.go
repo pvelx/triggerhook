@@ -2,7 +2,7 @@ package repository
 
 import (
 	"fmt"
-	"github.com/VladislavPav/trigger-hook/domain"
+	"github.com/pvelx/triggerHook/domain"
 	"testing"
 )
 
