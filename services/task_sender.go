@@ -34,9 +34,12 @@ func (s *taskSender) Send() {
 		panic("Transport for sending was not added")
 	}
 	go s.confirm()
-	for task := range s.chTasksReadyToSend {
-		if s.transport.Send(&task) {
-			s.chTasksToConfirm <- task
+	for {
+		select {
+		case task := <-s.chTasksReadyToSend:
+			if s.transport.Send(&task) {
+				s.chTasksToConfirm <- task
+			}
 		}
 	}
 }

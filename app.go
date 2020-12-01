@@ -21,6 +21,7 @@ func Default() *Scheduler {
 		waitingTaskService,
 		preloadingTaskService,
 		senderService,
+		taskManager,
 	}
 }
 
@@ -30,10 +31,18 @@ type Scheduler struct {
 	waitingTaskService    contracts.WaitingTaskServiceInterface
 	preloadingTaskService contracts.PreloadingTaskServiceInterface
 	senderService         contracts.TaskSenderInterface
+	taskManager           contracts.TaskManagerInterface
 }
 
 func (s *Scheduler) SetTransport(transport contracts.SendingTransportInterface) {
 	s.senderService.SetTransport(transport)
+}
+
+func (s *Scheduler) Delete(taskId string) (bool, *error) {
+	if err := s.taskManager.Delete(taskId); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (s *Scheduler) Create(execTime int64) (*domain.Task, *error) {

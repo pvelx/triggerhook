@@ -2,13 +2,11 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"github.com/VladislavPav/trigger-hook/clients"
 	"github.com/VladislavPav/trigger-hook/contracts"
 	"github.com/VladislavPav/trigger-hook/domain"
 	"github.com/VladislavPav/trigger-hook/utils"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -25,9 +23,9 @@ const queryFindBySecToExecTime = `SELECT id, exec_time, taken_by_connection, sta
 		AND (
 			taken_by_connection NOT IN (
 				SELECT ID FROM INFORMATION_SCHEMA.PROCESSLIST
-			) 
+			)
 			OR taken_by_connection IS NULL
-		)`
+		) LIMIT 20000`
 const queryLockTasks = "UPDATE task SET taken_by_connection = CONNECTION_ID() WHERE id IN(?)"
 
 type mysqlRepo struct{}
@@ -61,6 +59,11 @@ func (mysqlRepo) Create(task *domain.Task, isTaken bool) *utils.ErrorRepo {
 	return nil
 }
 
+func (mysqlRepo) Delete(taskId string) *error {
+
+	return nil
+}
+
 func (mysqlRepo) ChangeStatusToCompleted(task *domain.Task) *utils.ErrorRepo {
 	stmt, err := clients.Client.Prepare("UPDATE task SET status = ? WHERE status = ? AND id = ? taken_by_connection = CONNECTION_ID()")
 	if err != nil {
@@ -87,31 +90,34 @@ func (mysqlRepo) FindBySecToExecTime(secToNow int64) (domain.Tasks, *utils.Error
 	resultTasks, errExec := tx.Query(queryFindBySecToExecTime, domain.StatusAwaiting, toNextExecTime)
 	if errExec != nil {
 		tx.Rollback()
-		fmt.Println("\n", (errExec), "\n ....Transaction rollback!\n")
+		//fmt.Println("\n", (errExec), "\n ....Transaction rollback 1!")
 		return nil, utils.NewErrorRepo("database error", errExec)
 	}
-	var ids []string
-	results := make(domain.Tasks, 0)
+	ids := make([]interface{}, 0, 1000)
+	results := make(domain.Tasks, 0, 1000)
 	for resultTasks.Next() {
 		var task domain.Task
 		if getErr := resultTasks.Scan(&task.Id, &task.ExecTime, &task.TakenByConnection, &task.Status); getErr != nil {
 			return nil, utils.NewErrorRepo("database error", getErr)
 		}
 
-		ids = append(ids, strconv.Itoa(int(task.Id)))
+		ids = append(ids, int(task.Id))
 		results = append(results, task)
 	}
-	_, err = tx.Exec(queryLockTasks, strings.Join(ids, ", "))
+
+	newQueryLockTasks := strings.Replace(queryLockTasks, "?", "?"+strings.Repeat(",?", len(ids)-1), 1)
+	//fmt.Println(newQueryLockTasks)
+	_, err = tx.Exec(newQueryLockTasks, ids...)
 	if err != nil {
 		tx.Rollback()
-		fmt.Println("\n", (err), "\n ....Transaction rollback!\n")
+		//fmt.Println("\n", (err), "\n ....Transaction rollback 2!")
 		return nil, utils.NewErrorRepo("database error", err)
 	}
 	err = tx.Commit()
 	if err != nil {
 		log.Fatal(err)
 	} else {
-		fmt.Println("....Transaction committed\n")
+		//fmt.Println("....Transaction committed")
 	}
 
 	return results, nil

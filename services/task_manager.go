@@ -24,6 +24,13 @@ func (s *taskManager) Create(task *domain.Task, isTaken bool) *error {
 	return nil
 }
 
+func (s *taskManager) Delete(taskId string) *error {
+	if err := s.repo.Delete(taskId); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *taskManager) GetTasksBySecToExecTime(secToExecTime int64) []domain.Task {
 	tasksToExec, err := s.repo.FindBySecToExecTime(secToExecTime)
 	if err != nil {
