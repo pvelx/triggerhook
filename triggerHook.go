@@ -7,7 +7,7 @@ import (
 	"github.com/pvelx/triggerHook/services"
 )
 
-func Default() *Scheduler {
+func Default() *triggerHook {
 	chPreloadedTasks := make(chan domain.Task, 1000000)
 	chTasksReadyToSend := make(chan domain.Task, 1000000)
 	taskManager := services.NewTaskManager(repository.MysqlRepo)
@@ -15,41 +15,42 @@ func Default() *Scheduler {
 	waitingTaskService := services.NewWaitingTaskService(chPreloadedTasks, chTasksReadyToSend)
 	senderService := services.NewTaskSender(taskManager, chTasksReadyToSend)
 
-	return &Scheduler{
-		chPreloadedTasks,
-		chTasksReadyToSend,
-		waitingTaskService,
-		preloadingTaskService,
-		senderService,
-		taskManager,
+	return &triggerHook{
+		chPreloadedTasks:      chPreloadedTasks,
+		chTasksReadyToSend:    chTasksReadyToSend,
+		waitingTaskService:    waitingTaskService,
+		preloadingTaskService: preloadingTaskService,
+		senderService:         senderService,
+		taskManager:           taskManager,
 	}
 }
 
-type Scheduler struct {
+type triggerHook struct {
 	chPreloadedTasks      chan domain.Task
 	chTasksReadyToSend    chan domain.Task
 	waitingTaskService    contracts.WaitingTaskServiceInterface
 	preloadingTaskService contracts.PreloadingTaskServiceInterface
 	senderService         contracts.TaskSenderInterface
 	taskManager           contracts.TaskManagerInterface
+	contracts.TasksDeferredInterface
 }
 
-func (s *Scheduler) SetTransport(transport contracts.SendingTransportInterface) {
+func (s *triggerHook) SetTransport(transport contracts.SendingTransportInterface) {
 	s.senderService.SetTransport(transport)
 }
 
-func (s *Scheduler) Delete(taskId string) (bool, *error) {
+func (s *triggerHook) Delete(taskId string) (bool, *error) {
 	if err := s.taskManager.Delete(taskId); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func (s *Scheduler) Create(execTime int64) (*domain.Task, *error) {
+func (s *triggerHook) Create(execTime int64) (*domain.Task, *error) {
 	return s.preloadingTaskService.AddNewTask(execTime)
 }
 
-func (s *Scheduler) Run() {
+func (s *triggerHook) Run() {
 	go s.preloadingTaskService.Preload()
 	go s.senderService.Send()
 	s.waitingTaskService.WaitUntilExecTime()

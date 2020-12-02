@@ -42,7 +42,7 @@ type WaitingTaskServiceInterface interface {
 	WaitUntilExecTime()
 }
 
-type SchedulerInterface interface {
+type TasksDeferredInterface interface {
 	Create(execTime int64) (*domain.Task, *error)
 	Delete(id string) (bool, *error)
 	SetTransport(transport SendingTransportInterface)
