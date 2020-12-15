@@ -15,18 +15,22 @@ func init() {
 	appInstanceId = uuid.New().String()
 }
 
-func Default() *triggerHook {
-	chPreloadedTasks := make(chan domain.Task, 1000000)
-	chTasksReadyToSend := make(chan domain.Task, 1000000)
+func Default() contracts.TasksDeferredInterface {
+	eventErrorHandler := services.NewEventErrorHandler()
+
 	repo := repository.NewRepository(clients.Client, appInstanceId)
 	taskManager := services.NewTaskManager(repo)
-	preloadingTaskService := services.NewPreloadingTaskService(taskManager, chPreloadedTasks)
-	waitingTaskService := services.NewWaitingTaskService(chPreloadedTasks, chTasksReadyToSend)
-	senderService := services.NewTaskSender(taskManager, chTasksReadyToSend)
+	preloadingTaskService := services.NewPreloadingTaskService(taskManager)
+
+	waitingTaskService := services.NewWaitingTaskService(preloadingTaskService.GetPreloadedChan())
+
+	senderService := services.NewTaskSender(
+		taskManager,
+		waitingTaskService.GetReadyToSendChan(),
+	)
 
 	return &triggerHook{
-		chPreloadedTasks:      chPreloadedTasks,
-		chTasksReadyToSend:    chTasksReadyToSend,
+		eventErrorHandler:     eventErrorHandler,
 		waitingTaskService:    waitingTaskService,
 		preloadingTaskService: preloadingTaskService,
 		senderService:         senderService,
@@ -35,20 +39,23 @@ func Default() *triggerHook {
 }
 
 type triggerHook struct {
-	chPreloadedTasks      chan domain.Task
-	chTasksReadyToSend    chan domain.Task
 	waitingTaskService    contracts.WaitingTaskServiceInterface
 	preloadingTaskService contracts.PreloadingTaskServiceInterface
 	senderService         contracts.TaskSenderInterface
 	taskManager           contracts.TaskManagerInterface
-	contracts.TasksDeferredInterface
+	eventErrorHandler     contracts.EventErrorHandlerInterface
 }
 
-func (s *triggerHook) SetTransport(transport contracts.SendingTransportInterface) {
-	s.senderService.SetTransport(transport)
+func (s *triggerHook) SetTransport(externalSender func(task *domain.Task)) {
+	s.senderService.SetTransport(externalSender)
+}
+
+func (s *triggerHook) SetErrorHandler(externalErrorHandler func(event services.EventError)) {
+	s.eventErrorHandler.SetErrorHandler(externalErrorHandler)
 }
 
 func (s *triggerHook) Delete(taskId int64) (bool, error) {
+	s.waitingTaskService.CancelIfExist(taskId)
 	if err := s.taskManager.Delete(domain.Task{Id: taskId}); err != nil {
 		return false, err
 	}
@@ -59,8 +66,10 @@ func (s *triggerHook) Create(execTime int64) (*domain.Task, error) {
 	return s.preloadingTaskService.AddNewTask(execTime)
 }
 
-func (s *triggerHook) Run() {
+func (s *triggerHook) Run() error {
 	go s.preloadingTaskService.Preload()
 	go s.senderService.Send()
-	s.waitingTaskService.WaitUntilExecTime()
+	go s.waitingTaskService.WaitUntilExecTime()
+
+	return s.eventErrorHandler.Listen()
 }

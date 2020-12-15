@@ -30,12 +30,16 @@ func (s *taskManager) Delete(task domain.Task) error {
 	return nil
 }
 
-func (s *taskManager) GetTasksBySecToExecTime(secToExecTime int64) []domain.Task {
-	tasksToExec, err := s.repo.FindBySecToExecTime(secToExecTime, 2000)
+func (s *taskManager) CountReadyToExec(secToExecTime int64) (int, error) {
+	return s.repo.CountReadyToExec(secToExecTime)
+}
+
+func (s *taskManager) GetTasksBySecToExecTime(secToExecTime int64, count int) ([]domain.Task, error) {
+	tasksToExec, err := s.repo.FindBySecToExecTime(secToExecTime, count)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return tasksToExec
+	return tasksToExec, nil
 }
 
 func (s *taskManager) ConfirmExecution(task *domain.Task) error {

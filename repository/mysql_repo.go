@@ -79,6 +79,26 @@ func (r *mysqlRepo) DeleteBunch(tasks []*domain.Task) error {
 	return nil
 }
 
+func (r *mysqlRepo) CountReadyToExec(secToNow int64) (int, error) {
+	toNextExecTime := time.Now().Add(time.Duration(secToNow) * time.Second).Unix()
+	ctx := context.Background()
+	tx, err := r.client.BeginTx(ctx, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	const queryCount = `SELECT count(id) FROM task WHERE exec_time <= ? AND taken_by_instance != ?`
+
+	count := 0
+	errQuery := tx.QueryRow(queryCount, toNextExecTime, r.appInstanceId).Scan(&count)
+
+	if errQuery != nil {
+		tx.Rollback()
+		return 0, errors.Wrap(errQuery, "Error getting count of task")
+	}
+
+	return count, nil
+}
+
 func (r *mysqlRepo) FindBySecToExecTime(secToNow int64, count int) (domain.Tasks, error) {
 	toNextExecTime := time.Now().Add(time.Duration(secToNow) * time.Second).Unix()
 	ctx := context.Background()
@@ -89,7 +109,9 @@ func (r *mysqlRepo) FindBySecToExecTime(secToNow int64, count int) (domain.Tasks
 
 	const queryFindBySecToExecTime = `SELECT id, exec_time 
 		FROM task
-		WHERE exec_time <= ? AND taken_by_instance != ? LIMIT ? 
+		WHERE exec_time <= ? AND taken_by_instance != ? 
+		ORDER BY exec_time
+		LIMIT ?
 		FOR UPDATE`
 
 	resultTasks, errExec := tx.Query(queryFindBySecToExecTime, toNextExecTime, r.appInstanceId, count)

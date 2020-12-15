@@ -9,14 +9,12 @@ import (
 	"time"
 )
 
-func NewWaitingTaskService(
-	chPreloadedTask <-chan domain.Task,
-	chTasksReadyToSend chan<- domain.Task,
-) contracts.WaitingTaskServiceInterface {
+func NewWaitingTaskService(chPreloadedTasks <-chan domain.Task) contracts.WaitingTaskServiceInterface {
 	service := &waitingTaskService{
 		tasksWaitingList:   prioritized_task_list.NewHeapPrioritizedTaskList([]domain.Task{}),
-		chPreloadedTask:    chPreloadedTask,
-		chTasksReadyToSend: chTasksReadyToSend,
+		chPreloadedTasks:   chPreloadedTasks,
+		chCanceledTasks:    make(chan int64, 10000),
+		chTasksReadyToSend: make(chan domain.Task, 1000000),
 		mu:                 &sync.Mutex{},
 	}
 
@@ -25,9 +23,20 @@ func NewWaitingTaskService(
 
 type waitingTaskService struct {
 	tasksWaitingList   contracts.PrioritizedTaskListInterface
-	chPreloadedTask    <-chan domain.Task
-	chTasksReadyToSend chan<- domain.Task
+	chPreloadedTasks   <-chan domain.Task
+	chCanceledTasks    chan int64
+	chTasksReadyToSend chan domain.Task
 	mu                 *sync.Mutex
+}
+
+func (s *waitingTaskService) GetReadyToSendChan() <-chan domain.Task {
+	return s.chTasksReadyToSend
+}
+
+func (s *waitingTaskService) deleteTaskFromWaitingList(taskId int64) {
+	s.mu.Lock()
+	defer func() { s.mu.Unlock() }()
+	s.tasksWaitingList.DeleteIfExist(taskId)
 }
 
 func (s *waitingTaskService) addTaskToWaitingList(task *domain.Task) {
@@ -42,13 +51,24 @@ func (s *waitingTaskService) takeTaskFromWaitingList() *domain.Task {
 	return s.tasksWaitingList.Take()
 }
 
+func (s *waitingTaskService) CancelIfExist(taskId int64) {
+	s.chCanceledTasks <- taskId
+}
+
 func (s *waitingTaskService) WaitUntilExecTime() {
 	updatedQueue := make(chan bool)
 
 	go func() {
 		for {
 			select {
-			case task, ok := <-s.chPreloadedTask:
+			case taskId, ok := <-s.chCanceledTasks:
+				if ok {
+					s.deleteTaskFromWaitingList(taskId)
+					updatedQueue <- true
+				} else {
+					panic("chan was closed")
+				}
+			case task, ok := <-s.chPreloadedTasks:
 				if ok {
 					s.addTaskToWaitingList(&task)
 					updatedQueue <- true
