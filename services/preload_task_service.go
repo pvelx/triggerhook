@@ -20,7 +20,7 @@ type preloadingTaskService struct {
 	timePreload     int64
 }
 
-func (s *preloadingTaskService) AddNewTask(execTime int64) (*domain.Task, *error) {
+func (s *preloadingTaskService) AddNewTask(execTime int64) (*domain.Task, error) {
 	task := domain.Task{
 		ExecTime: execTime,
 	}
@@ -49,22 +49,21 @@ func (s *preloadingTaskService) findToExecMock() {
 
 	for {
 		ts := time.Now().Unix()
-		con := int64(40)
 		idx++
-		s.chPreloadedTask <- domain.Task{Id: idx, ExecTime: ts, TakenByConnection: &con}
+		s.chPreloadedTask <- domain.Task{Id: idx, ExecTime: ts}
 		time.Sleep(time.Second)
 	}
 }
 
 func (s *preloadingTaskService) Preload() {
-	go s.findToExecMock()
-
-	for {
-		tasksToExec := s.taskManager.GetTasksBySecToExecTime(s.timePreload)
-		for _, task := range tasksToExec {
-			s.chPreloadedTask <- task
-		}
-
-		time.Sleep(time.Duration(s.timePreload) * time.Second)
-	}
+	//go s.findToExecMock()
+	//
+	//for {
+	//	tasksToExec := s.taskManager.GetTasksBySecToExecTime(s.timePreload)
+	//	for _, task := range tasksToExec {
+	//		s.chPreloadedTask <- task
+	//	}
+	//
+	//	time.Sleep(time.Duration(s.timePreload) * time.Second)
+	//}
 }

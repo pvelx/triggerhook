@@ -2,123 +2,217 @@ package repository
 
 import (
 	"context"
-	"github.com/pvelx/triggerHook/clients"
+	"database/sql"
+	"fmt"
+	"github.com/pkg/errors"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/utils"
 	"log"
 	"strings"
 	"time"
 )
 
-var MysqlRepo contracts.RepositoryInterface = &mysqlRepo{}
+type task struct {
+	Id              int64
+	ExecTime        int64
+	TakenByInstance string
+}
 
-const queryCreateTask = "INSERT INTO task (exec_time, status) VALUES (?, ?);"
-const queryCreateTaskTaken = "INSERT INTO task (exec_time, taken_by_connection, status) VALUES (?, CONNECTION_ID(), ?);"
+func NewRepository(client *sql.DB, appInstanceId string) contracts.RepositoryInterface {
+	return &mysqlRepo{client, appInstanceId}
+}
 
-const queryFindBySecToExecTime = `SELECT id, exec_time, taken_by_connection, status 
-	FROM task
-	WHERE status = ? 
-		AND exec_time < ? 
-		AND (
-			taken_by_connection NOT IN (
-				SELECT ID FROM INFORMATION_SCHEMA.PROCESSLIST
-			)
-			OR taken_by_connection IS NULL
-		) LIMIT 20000`
-const queryLockTasks = "UPDATE task SET taken_by_connection = CONNECTION_ID() WHERE id IN(?)"
+type mysqlRepo struct {
+	client        *sql.DB
+	appInstanceId string
+}
 
-type mysqlRepo struct{}
+func (r *mysqlRepo) Create(task *domain.Task, isTaken bool) error {
+	query := "INSERT INTO task (exec_time, taken_by_instance) VALUES (?, ?);"
 
-func (mysqlRepo) Create(task *domain.Task, isTaken bool) *utils.ErrorRepo {
-	query := queryCreateTask
-	if isTaken {
-		query = queryCreateTaskTaken
-	}
-	stmt, err := clients.Client.Prepare(query)
+	stmt, err := r.client.Prepare(query)
 	if err != nil {
-		//logger.Error("Error when trying to prepare save statement", err)
-		return utils.NewErrorRepo("database error", err)
+		return errors.Wrap(err, "database error")
 	}
 	defer stmt.Close()
 
-	insertResult, saveErr := stmt.Exec(task.ExecTime, task.Status)
+	appInstanceId := ""
+	if isTaken {
+		appInstanceId = r.appInstanceId
+	}
+
+	insertResult, saveErr := stmt.Exec(task.ExecTime, appInstanceId)
 
 	if saveErr != nil {
-		//logger.Error("Error when trying to save", err)
-		return utils.NewErrorRepo("database error", err)
+		return errors.Wrap(saveErr, "database error")
 	}
 
 	taskId, errGetId := insertResult.LastInsertId()
 	if errGetId != nil {
-		//logger.Error("Error when trying to get last id", err)
-		return utils.NewErrorRepo("database error", errGetId)
+		return errors.Wrap(errGetId, "database error")
 	}
 	task.Id = taskId
 
 	return nil
 }
 
-func (mysqlRepo) Delete(taskId string) *error {
+func (r *mysqlRepo) DeleteBunch(tasks []*domain.Task) error {
 
-	return nil
-}
+	newQueryLockTasks := strings.Replace("DELETE FROM task WHERE id IN (?)", "?", "?"+strings.Repeat(",?", len(tasks)-1), 1)
 
-func (mysqlRepo) ChangeStatusToCompleted(task *domain.Task) *utils.ErrorRepo {
-	stmt, err := clients.Client.Prepare("UPDATE task SET status = ? WHERE status = ? AND id = ? taken_by_connection = CONNECTION_ID()")
+	stmt, err := r.client.Prepare(newQueryLockTasks)
 	if err != nil {
-		return utils.NewErrorRepo("database error", err)
+		return errors.Wrap(err, "database error")
 	}
 	defer stmt.Close()
+	var ids []interface{}
+	for _, task := range tasks {
+		ids = append(ids, task.Id)
+	}
 
-	_, updateErr := stmt.Exec(domain.StatusCompleted, domain.StatusAwaiting, task.Id)
+	_, updateErr := stmt.Exec(ids...)
 
 	if updateErr != nil {
-		return utils.NewErrorRepo("database error", updateErr)
+		return errors.Wrap(updateErr, "database error")
 	}
 
 	return nil
 }
 
-func (mysqlRepo) FindBySecToExecTime(secToNow int64) (domain.Tasks, *utils.ErrorRepo) {
+func (r *mysqlRepo) FindBySecToExecTime(secToNow int64, count int) (domain.Tasks, error) {
 	toNextExecTime := time.Now().Add(time.Duration(secToNow) * time.Second).Unix()
 	ctx := context.Background()
-	tx, err := clients.Client.BeginTx(ctx, nil)
+	tx, err := r.client.BeginTx(ctx, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	resultTasks, errExec := tx.Query(queryFindBySecToExecTime, domain.StatusAwaiting, toNextExecTime)
+
+	const queryFindBySecToExecTime = `SELECT id, exec_time 
+		FROM task
+		WHERE exec_time <= ? AND taken_by_instance != ? LIMIT ? 
+		FOR UPDATE`
+
+	resultTasks, errExec := tx.Query(queryFindBySecToExecTime, toNextExecTime, r.appInstanceId, count)
 	if errExec != nil {
 		tx.Rollback()
-		//fmt.Println("\n", (errExec), "\n ....Transaction rollback 1!")
-		return nil, utils.NewErrorRepo("database error", errExec)
+		return nil, errors.Wrap(errExec, "database error")
 	}
 	ids := make([]interface{}, 0, 1000)
 	results := make(domain.Tasks, 0, 1000)
 	for resultTasks.Next() {
 		var task domain.Task
-		if getErr := resultTasks.Scan(&task.Id, &task.ExecTime, &task.TakenByConnection, &task.Status); getErr != nil {
-			return nil, utils.NewErrorRepo("database error", getErr)
+		if getErr := resultTasks.Scan(&task.Id, &task.ExecTime); getErr != nil {
+			return nil, errors.Wrap(getErr, "database error")
 		}
 
 		ids = append(ids, int(task.Id))
 		results = append(results, task)
 	}
-
-	newQueryLockTasks := strings.Replace(queryLockTasks, "?", "?"+strings.Repeat(",?", len(ids)-1), 1)
-	//fmt.Println(newQueryLockTasks)
-	_, err = tx.Exec(newQueryLockTasks, ids...)
-	if err != nil {
-		tx.Rollback()
-		//fmt.Println("\n", (err), "\n ....Transaction rollback 2!")
-		return nil, utils.NewErrorRepo("database error", err)
-	}
-	err = tx.Commit()
-	if err != nil {
+	if err = resultTasks.Err(); err != nil {
 		log.Fatal(err)
-	} else {
-		//fmt.Println("....Transaction committed")
+	}
+
+	if len(results) == 0 {
+		if err = tx.Commit(); err != nil {
+			log.Fatal(err)
+		}
+		return results, nil
+	}
+
+	newQueryLockTasks := fmt.Sprintf("UPDATE task SET taken_by_instance = ? WHERE id IN(?%s)", strings.Repeat(",?", len(ids)-1))
+
+	args := make([]interface{}, 0, len(ids)+1)
+	args = append(args, r.appInstanceId)
+	args = append(args, ids...)
+
+	_, errUpdate := tx.Exec(newQueryLockTasks, args...)
+	if errUpdate != nil {
+		tx.Rollback()
+		return nil, errors.Wrap(errUpdate, "database error")
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Fatal(err)
 	}
 
 	return results, nil
 }
+
+func (r *mysqlRepo) Up() error {
+	ctx := context.Background()
+
+	query := `create table IF NOT EXISTS task
+		(
+			id bigint auto_increment primary key,
+			exec_time int default 0 NOT NULL,
+			taken_by_instance varchar(36) default '' NOT NULL
+		)`
+
+	stmt, err := r.client.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.ExecContext(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//func (r *mysqlRepo) ChangeStatusToCompletedBunch(tasks []*domain.Task) *utils.ErrorRepo {
+//	newQuery := "UPDATE task SET status = ? WHERE status = ? AND id IN(?" + strings.Repeat(",?", len(tasks)-1) + ")"
+//
+//	stmt, err := r.client.Prepare(newQuery)
+//	if err != nil {
+//		return utils.NewErrorRepo("database error", err)
+//	}
+//	defer stmt.Close()
+//
+//	var args []interface{}
+//	args = append(args, domain.StatusCompleted)
+//	args = append(args, domain.StatusAwaiting)
+//	for _, task := range tasks {
+//		args = append(args, task.Id)
+//	}
+//
+//	_, updateErr := stmt.Exec(args...)
+//	if updateErr != nil {
+//		return utils.NewErrorRepo("database error", updateErr)
+//	}
+//
+//	return nil
+//}
+
+//func (r *mysqlRepo) ChangeStatusToCompleted(task *domain.Task) *utils.ErrorRepo {
+//	stmt, err := r.client.Prepare("UPDATE task SET status = ? WHERE status = ? AND id = ?")
+//	if err != nil {
+//		return utils.NewErrorRepo("database error", err)
+//	}
+//	defer stmt.Close()
+//
+//	_, updateErr := stmt.Exec(domain.StatusCompleted, domain.StatusAwaiting, task.Id)
+//
+//	if updateErr != nil {
+//		return utils.NewErrorRepo("database error", updateErr)
+//	}
+//
+//	return nil
+//}
+
+//func (r *mysqlRepo) Delete(task *domain.Task) *utils.ErrorRepo {
+//	stmt, err := r.client.Prepare("DELETE FROM task WHERE id = ?")
+//	if err != nil {
+//		return utils.NewErrorRepo("database error", err)
+//	}
+//	defer stmt.Close()
+//
+//	_, updateErr := stmt.Exec(task.Id)
+//
+//	if updateErr != nil {
+//		return utils.NewErrorRepo("database error", updateErr)
+//	}
+//
+//	return nil
+//}

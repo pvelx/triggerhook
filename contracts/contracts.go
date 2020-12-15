@@ -2,7 +2,6 @@ package contracts
 
 import (
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/utils"
 )
 
 type PrioritizedTaskListInterface interface {
@@ -20,21 +19,21 @@ type TaskSenderInterface interface {
 }
 
 type TaskManagerInterface interface {
-	Create(task *domain.Task, isTaken bool) *error
-	Delete(taskId string) *error
+	Create(task *domain.Task, isTaken bool) error
+	Delete(task domain.Task) error
 	GetTasksBySecToExecTime(secToExecTime int64) []domain.Task
-	ConfirmExecution(task *domain.Task) *utils.ErrorRepo
+	ConfirmExecution(task *domain.Task) error
 }
 
 type RepositoryInterface interface {
-	Create(task *domain.Task, isTaken bool) *utils.ErrorRepo
-	Delete(taskId string) *error
-	FindBySecToExecTime(secToNow int64) (domain.Tasks, *utils.ErrorRepo)
-	ChangeStatusToCompleted(*domain.Task) *utils.ErrorRepo
+	Create(task *domain.Task, isTaken bool) error
+	DeleteBunch(tasks []*domain.Task) error
+	FindBySecToExecTime(secToNow int64, count int) (domain.Tasks, error)
+	Up() error
 }
 
 type PreloadingTaskServiceInterface interface {
-	AddNewTask(execTime int64) (*domain.Task, *error)
+	AddNewTask(execTime int64) (*domain.Task, error)
 	Preload()
 }
 
@@ -43,8 +42,8 @@ type WaitingTaskServiceInterface interface {
 }
 
 type TasksDeferredInterface interface {
-	Create(execTime int64) (*domain.Task, *error)
-	Delete(id string) (bool, *error)
+	Create(execTime int64) (*domain.Task, error)
+	Delete(taskId int64) (bool, error)
 	SetTransport(transport SendingTransportInterface)
 	Run()
 }
