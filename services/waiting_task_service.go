@@ -13,8 +13,8 @@ func NewWaitingTaskService(chPreloadedTasks <-chan domain.Task) contracts.Waitin
 	service := &waitingTaskService{
 		tasksWaitingList:   prioritized_task_list.NewHeapPrioritizedTaskList([]domain.Task{}),
 		chPreloadedTasks:   chPreloadedTasks,
-		chCanceledTasks:    make(chan int64, 10000),
-		chTasksReadyToSend: make(chan domain.Task, 1000000),
+		chCanceledTasks:    make(chan int64, 10000000),
+		chTasksReadyToSend: make(chan domain.Task, 10000000),
 		mu:                 &sync.Mutex{},
 	}
 

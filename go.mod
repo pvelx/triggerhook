@@ -8,7 +8,6 @@ require (
 	github.com/containerd/continuity v0.0.0-20201208142359-180525291bb7 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/go-testfixtures/testfixtures/v3 v3.4.1
-	github.com/google/go-cmp v0.5.4
 	github.com/google/uuid v1.1.2
 	github.com/moby/term v0.0.0-20201110203204-bea5bbe245bf // indirect
 	github.com/ory/dockertest/v3 v3.6.2

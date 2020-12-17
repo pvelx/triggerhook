@@ -2,7 +2,6 @@ package contracts
 
 import (
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/services"
 )
 
 type PrioritizedTaskListInterface interface {
@@ -35,7 +34,8 @@ type TaskManagerInterface interface {
 
 type RepositoryInterface interface {
 	Create(task *domain.Task, isTaken bool) error
-	DeleteBunch(tasks []*domain.Task) error
+	//DeleteBunch(tasks []*domain.Task) error
+	ConfirmExecution(tasks *domain.Task) error
 	FindBySecToExecTime(secToNow int64, count int) (domain.Tasks, error)
 	CountReadyToExec(secToNow int64) (int, error)
 	Up() error
@@ -53,8 +53,24 @@ type WaitingTaskServiceInterface interface {
 	GetReadyToSendChan() <-chan domain.Task
 }
 
+type Level int
+
+const (
+	//The application cannot continue
+	LevelFatal Level = iota
+
+	//Must be delivered to support
+	LevelError
+)
+
+type EventError struct {
+	Level Level
+	Error error
+}
+
 type EventErrorHandlerInterface interface {
-	SetErrorHandler(func(services.EventError))
+	SetErrorHandler(func(EventError))
+	NewEventError(level Level, error error)
 	Listen() error
 }
 
@@ -67,7 +83,7 @@ type TasksDeferredInterface interface {
 	SetTransport(func(task *domain.Task))
 
 	//Configure the function using the desired error handler (for example, file logger, Sentry or other)
-	SetErrorHandler(func(services.EventError))
+	SetErrorHandler(func(EventError))
 
 	//LAUNCHER TRIGGER HOOK :) !!!
 	Run() error

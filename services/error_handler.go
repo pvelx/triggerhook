@@ -2,36 +2,21 @@ package services
 
 import "github.com/pvelx/triggerHook/contracts"
 
-type level int
-
-const (
-	//The application cannot continue
-	LevelFatal level = iota
-
-	//Must be delivered to support
-	LevelError
-)
-
-type EventError struct {
-	Level level
-	Error error
-}
-
 func NewEventErrorHandler() contracts.EventErrorHandlerInterface {
-	return &EventErrorHandler{chEventError: make(chan EventError, 1000)}
+	return &EventErrorHandler{chEventError: make(chan contracts.EventError, 10000000)}
 }
 
-func (eeh *EventErrorHandler) NewEventError(level level, error error) {
-	eeh.chEventError <- EventError{level, error}
+func (eeh *EventErrorHandler) NewEventError(level contracts.Level, error error) {
+	eeh.chEventError <- contracts.EventError{Level: level, Error: error}
 }
 
 type EventErrorHandler struct {
-	chEventError         chan EventError
-	externalErrorHandler func(event EventError)
+	chEventError         chan contracts.EventError
+	externalErrorHandler func(event contracts.EventError)
 	contracts.EventErrorHandlerInterface
 }
 
-func (eeh *EventErrorHandler) SetErrorHandler(externalErrorHandler func(event EventError)) {
+func (eeh *EventErrorHandler) SetErrorHandler(externalErrorHandler func(event contracts.EventError)) {
 	eeh.externalErrorHandler = externalErrorHandler
 }
 
@@ -41,7 +26,7 @@ func (eeh *EventErrorHandler) Listen() error {
 		case event := <-eeh.chEventError:
 			eeh.externalErrorHandler(event)
 
-			if event.Level == LevelFatal {
+			if event.Level == contracts.LevelFatal {
 				return event.Error
 			}
 		}

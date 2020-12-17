@@ -1,8 +1,8 @@
 package triggerHook
 
 import (
+	"database/sql"
 	"github.com/google/uuid"
-	"github.com/pvelx/triggerHook/clients"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"github.com/pvelx/triggerHook/repository"
@@ -15,10 +15,14 @@ func init() {
 	appInstanceId = uuid.New().String()
 }
 
-func Default() contracts.TasksDeferredInterface {
+func Default(client *sql.DB) contracts.TasksDeferredInterface {
 	eventErrorHandler := services.NewEventErrorHandler()
 
-	repo := repository.NewRepository(clients.Client, appInstanceId)
+	repo := repository.NewRepository(client, appInstanceId)
+	if err := repo.Up(); err != nil {
+		panic(err)
+	}
+
 	taskManager := services.NewTaskManager(repo)
 	preloadingTaskService := services.NewPreloadingTaskService(taskManager)
 
@@ -50,7 +54,7 @@ func (s *triggerHook) SetTransport(externalSender func(task *domain.Task)) {
 	s.senderService.SetTransport(externalSender)
 }
 
-func (s *triggerHook) SetErrorHandler(externalErrorHandler func(event services.EventError)) {
+func (s *triggerHook) SetErrorHandler(externalErrorHandler func(event contracts.EventError)) {
 	s.eventErrorHandler.SetErrorHandler(externalErrorHandler)
 }
 

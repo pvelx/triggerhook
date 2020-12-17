@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"time"
@@ -8,9 +9,10 @@ import (
 
 func NewPreloadingTaskService(tm contracts.TaskManagerInterface) contracts.PreloadingTaskServiceInterface {
 	return &preloadingTaskService{
-		taskManager:     tm,
-		chPreloadedTask: make(chan domain.Task, 1000000),
-		timePreload:     5,
+		taskManager:           tm,
+		chPreloadedTask:       make(chan domain.Task, 10000000),
+		timePreload:           5,
+		taskNumberInOneSearch: 100,
 	}
 }
 
@@ -59,21 +61,32 @@ func (s *preloadingTaskService) Preload() {
 		countFails = 0
 
 		if countReadyToExec > 0 {
-			workers := (countReadyToExec / s.taskNumberInOneSearch) + 1
+			workers := 10
 			for i := 0; i < workers; i++ {
+				fmt.Println(i)
 				go func() {
-					tasksToExec, err := s.taskManager.GetTasksBySecToExecTime(s.timePreload, s.taskNumberInOneSearch)
-					if err != nil {
-						panic("Cannot get tasks for doing")
-						return
-					}
-					for _, task := range tasksToExec {
-						s.chPreloadedTask <- task
+					for {
+						tasksToExec, err := s.taskManager.GetTasksBySecToExecTime(s.timePreload, s.taskNumberInOneSearch)
+						if len(tasksToExec) == 0 {
+							fmt.Printf("break")
+							break
+						}
+						fmt.Printf("worker: %d", len(tasksToExec))
+						fmt.Println()
+
+						if err != nil {
+							panic("Cannot get tasks for doing")
+							return
+						}
+						for _, task := range tasksToExec {
+							s.chPreloadedTask <- task
+						}
 					}
 				}()
 			}
+			time.Sleep(time.Hour)
 		} else {
-			time.Sleep(time.Duration(s.timePreload) * time.Second)
+			time.Sleep(time.Duration(100) * time.Second)
 		}
 	}
 }

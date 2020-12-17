@@ -11,7 +11,7 @@ func NewTaskSender(
 ) contracts.TaskSenderInterface {
 	return &taskSender{
 		taskManager:        taskManager,
-		chTasksToConfirm:   make(chan domain.Task, 10000),
+		chTasksToConfirm:   make(chan domain.Task, 10000000),
 		chTasksReadyToSend: chTasksReadyToSend,
 	}
 }
@@ -32,7 +32,11 @@ func (s *taskSender) Send() {
 	if s.sendByExternalTransport == nil {
 		panic("Transport for sending was not added")
 	}
-	go s.confirm()
+
+	for i := 0; i < 10; i++ {
+		go s.confirm()
+	}
+
 	for {
 		select {
 		case task := <-s.chTasksReadyToSend:
@@ -47,10 +51,6 @@ func (s *taskSender) confirm() {
 		select {
 		case task, ok := <-s.chTasksToConfirm:
 			if ok {
-				//if task.Id%1e+6 == 0 {
-				//	fmt.Println("confirmed:", task)
-				//}
-
 				if err := s.taskManager.ConfirmExecution(&task); err != nil {
 					panic(err)
 				}

@@ -56,43 +56,24 @@ func (r *mysqlRepo) Create(task *domain.Task, isTaken bool) error {
 	return nil
 }
 
-func (r *mysqlRepo) DeleteBunch(tasks []*domain.Task) error {
-
-	newQueryLockTasks := strings.Replace("DELETE FROM task WHERE id IN (?)", "?", "?"+strings.Repeat(",?", len(tasks)-1), 1)
-
-	stmt, err := r.client.Prepare(newQueryLockTasks)
-	if err != nil {
-		return errors.Wrap(err, "database error")
-	}
-	defer stmt.Close()
-	var ids []interface{}
-	for _, task := range tasks {
-		ids = append(ids, task.Id)
-	}
-
-	_, updateErr := stmt.Exec(ids...)
-
+func (r *mysqlRepo) ConfirmExecution(tasks *domain.Task) error {
+	_, updateErr := r.client.Exec("UPDATE task SET is_deleted = 1 WHERE id = ?", tasks.Id)
 	if updateErr != nil {
 		return errors.Wrap(updateErr, "database error")
 	}
+	//fmt.Println("confirm end")
 
 	return nil
 }
 
 func (r *mysqlRepo) CountReadyToExec(secToNow int64) (int, error) {
 	toNextExecTime := time.Now().Add(time.Duration(secToNow) * time.Second).Unix()
-	ctx := context.Background()
-	tx, err := r.client.BeginTx(ctx, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
+
 	const queryCount = `SELECT count(id) FROM task WHERE exec_time <= ? AND taken_by_instance != ?`
 
 	count := 0
-	errQuery := tx.QueryRow(queryCount, toNextExecTime, r.appInstanceId).Scan(&count)
-
+	errQuery := r.client.QueryRow(queryCount, toNextExecTime, r.appInstanceId).Scan(&count)
 	if errQuery != nil {
-		tx.Rollback()
 		return 0, errors.Wrap(errQuery, "Error getting count of task")
 	}
 
@@ -109,16 +90,17 @@ func (r *mysqlRepo) FindBySecToExecTime(secToNow int64, count int) (domain.Tasks
 
 	const queryFindBySecToExecTime = `SELECT id, exec_time 
 		FROM task
-		WHERE exec_time <= ? AND taken_by_instance != ? 
+		WHERE exec_time <= ? AND taken_by_instance != ? AND is_deleted != 1
 		ORDER BY exec_time
 		LIMIT ?
 		FOR UPDATE`
 
-	resultTasks, errExec := tx.Query(queryFindBySecToExecTime, toNextExecTime, r.appInstanceId, count)
+	resultTasks, errExec := tx.QueryContext(ctx, queryFindBySecToExecTime, toNextExecTime, r.appInstanceId, count)
 	if errExec != nil {
 		tx.Rollback()
 		return nil, errors.Wrap(errExec, "database error")
 	}
+
 	ids := make([]interface{}, 0, 1000)
 	results := make(domain.Tasks, 0, 1000)
 	for resultTasks.Next() {
@@ -131,6 +113,7 @@ func (r *mysqlRepo) FindBySecToExecTime(secToNow int64, count int) (domain.Tasks
 		results = append(results, task)
 	}
 	if err = resultTasks.Err(); err != nil {
+		tx.Rollback()
 		log.Fatal(err)
 	}
 
@@ -147,7 +130,7 @@ func (r *mysqlRepo) FindBySecToExecTime(secToNow int64, count int) (domain.Tasks
 	args = append(args, r.appInstanceId)
 	args = append(args, ids...)
 
-	_, errUpdate := tx.Exec(newQueryLockTasks, args...)
+	_, errUpdate := tx.ExecContext(ctx, newQueryLockTasks, args...)
 	if errUpdate != nil {
 		tx.Rollback()
 		return nil, errors.Wrap(errUpdate, "database error")
@@ -175,7 +158,6 @@ func (r *mysqlRepo) Up() error {
 		return err
 	}
 	defer stmt.Close()
-
 	_, err = stmt.ExecContext(ctx)
 	if err != nil {
 		return err

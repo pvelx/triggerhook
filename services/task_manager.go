@@ -24,9 +24,9 @@ func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
 }
 
 func (s *taskManager) Delete(task domain.Task) error {
-	if err := s.repo.DeleteBunch([]*domain.Task{&task}); err != nil {
-		return err
-	}
+	//if err := s.repo.DeleteBunch([]*domain.Task{&task}); err != nil {
+	//	return err
+	//}
 	return nil
 }
 
@@ -43,5 +43,5 @@ func (s *taskManager) GetTasksBySecToExecTime(secToExecTime int64, count int) ([
 }
 
 func (s *taskManager) ConfirmExecution(task *domain.Task) error {
-	return s.repo.DeleteBunch([]*domain.Task{task})
+	return s.repo.ConfirmExecution(task)
 }
