@@ -12,7 +12,7 @@ func NewPreloadingTaskService(tm contracts.TaskManagerInterface) contracts.Prelo
 		taskManager:           tm,
 		chPreloadedTask:       make(chan domain.Task, 10000000),
 		timePreload:           5,
-		taskNumberInOneSearch: 100,
+		taskNumberInOneSearch: 1000,
 	}
 }
 
@@ -35,7 +35,7 @@ func (s *preloadingTaskService) AddNewTask(execTime int64) (*domain.Task, error)
 
 	isTaken := s.timePreload > relativeTimeToExec
 
-	if err := s.taskManager.Create(&task, isTaken); err != nil {
+	if err := s.taskManager.Create([]contracts.TaskToCreate{{&task, isTaken}}); err != nil {
 		return nil, err
 	}
 	if isTaken {
@@ -48,7 +48,7 @@ func (s *preloadingTaskService) Preload() {
 	countFails := 0
 
 	for {
-		countReadyToExec, err := s.taskManager.CountReadyToExec(s.timePreload)
+		collection, err := s.taskManager.GetTasksBySecToExecTime(s.timePreload)
 		if err != nil {
 			countFails++
 			time.Sleep(time.Duration(s.timePreload) * 300 * time.Millisecond)
@@ -60,33 +60,31 @@ func (s *preloadingTaskService) Preload() {
 		}
 		countFails = 0
 
-		if countReadyToExec > 0 {
-			workers := 10
-			for i := 0; i < workers; i++ {
-				fmt.Println(i)
-				go func() {
-					for {
-						tasksToExec, err := s.taskManager.GetTasksBySecToExecTime(s.timePreload, s.taskNumberInOneSearch)
-						if len(tasksToExec) == 0 {
-							fmt.Printf("break")
-							break
-						}
-						fmt.Printf("worker: %d", len(tasksToExec))
-						fmt.Println()
+		workersCount := 5
+		for worker := 0; worker < workersCount; worker++ {
+			//workerNum := worker
+			go func() {
+				for {
+					tasksToExec, err := collection.Next()
 
-						if err != nil {
-							panic("Cannot get tasks for doing")
-							return
-						}
-						for _, task := range tasksToExec {
-							s.chPreloadedTask <- task
-						}
+					if len(tasksToExec) == 0 {
+						fmt.Printf("break")
+						continue
 					}
-				}()
-			}
-			time.Sleep(time.Hour)
-		} else {
-			time.Sleep(time.Duration(100) * time.Second)
+					//fmt.Printf("workerId: %d - %d", workerNum, len(tasksToExec))
+					//fmt.Println()
+
+					if err != nil {
+						panic("Cannot get tasks for doing")
+						return
+					}
+					for _, task := range tasksToExec {
+						s.chPreloadedTask <- task
+					}
+				}
+			}()
 		}
+		time.Sleep(time.Hour)
+
 	}
 }

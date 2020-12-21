@@ -12,6 +12,7 @@ require (
 	github.com/moby/term v0.0.0-20201110203204-bea5bbe245bf // indirect
 	github.com/ory/dockertest/v3 v3.6.2
 	github.com/pkg/errors v0.9.1
+	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.7.0 // indirect
 	github.com/stretchr/testify v1.5.1
 	golang.org/x/net v0.0.0-20201209123823-ac852fbbde11 // indirect

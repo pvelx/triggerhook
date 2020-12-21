@@ -1,36 +1,30 @@
 package repository
 
-import (
-	"github.com/pvelx/triggerHook/domain"
-	"log"
-	"testing"
-)
-
-func BenchmarkBunchDelete(b *testing.B) {
-	clear()
-	b.ReportAllocs()
-	b.ResetTimer()
-	b.StopTimer()
-
-	for n := 0; n < b.N; n++ {
-		var tasks []*domain.Task
-		for i := 0; i < 50; i++ {
-			task := &domain.Task{ExecTime: 1}
-			tasks = append(tasks, task)
-			err := repository.Create(task, false)
-			if err != nil {
-				log.Fatal(err, "Error while create")
-			}
-		}
-
-		b.StartTimer()
-		errDelete := repository.DeleteBunch(tasks)
-		if errDelete != nil {
-			log.Fatal(errDelete, "Error while delete")
-		}
-		b.StopTimer()
-	}
-}
+//func BenchmarkBunchDelete(b *testing.B) {
+//	clear()
+//	b.ReportAllocs()
+//	b.ResetTimer()
+//	b.StopTimer()
+//
+//	for n := 0; n < b.N; n++ {
+//		var tasks []*domain.Task
+//		for i := 0; i < 50; i++ {
+//			task := &domain.Task{ExecTime: 1}
+//			tasks = append(tasks, task)
+//			err := repository.Create(task, false)
+//			if err != nil {
+//				log.Fatal(err, "Error while create")
+//			}
+//		}
+//
+//		b.StartTimer()
+//		errDelete := repository.DeleteBunch(tasks)
+//		if errDelete != nil {
+//			log.Fatal(errDelete, "Error while delete")
+//		}
+//		b.StopTimer()
+//	}
+//}
 
 //func BenchmarkBunchChangeStatus(b *testing.B) {
 //	repo := setUp()

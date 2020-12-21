@@ -11,7 +11,7 @@ func NewTaskSender(
 ) contracts.TaskSenderInterface {
 	return &taskSender{
 		taskManager:        taskManager,
-		chTasksToConfirm:   make(chan domain.Task, 10000000),
+		chTasksToConfirm:   make(chan *domain.Task, 10000000),
 		chTasksReadyToSend: chTasksReadyToSend,
 	}
 }
@@ -20,7 +20,7 @@ type taskSender struct {
 	contracts.TaskSenderInterface
 	sendByExternalTransport func(task *domain.Task)
 	chTasksReadyToSend      <-chan domain.Task
-	chTasksToConfirm        chan domain.Task
+	chTasksToConfirm        chan *domain.Task
 	taskManager             contracts.TaskManagerInterface
 }
 
@@ -41,22 +41,22 @@ func (s *taskSender) Send() {
 		select {
 		case task := <-s.chTasksReadyToSend:
 			s.sendByExternalTransport(&task)
-			s.chTasksToConfirm <- task
+			s.chTasksToConfirm <- &task
 		}
 	}
 }
 
 func (s *taskSender) confirm() {
-	for {
-		select {
-		case task, ok := <-s.chTasksToConfirm:
-			if ok {
-				if err := s.taskManager.ConfirmExecution(&task); err != nil {
-					panic(err)
-				}
-			} else {
-				panic("chan was closed")
+
+	var tasksToDelete []*domain.Task
+	for task := range s.chTasksToConfirm {
+		tasksToDelete = append(tasksToDelete, task)
+		if len(tasksToDelete)%1e3 == 0 {
+			if err := s.taskManager.ConfirmExecution(tasksToDelete); err != nil {
+				panic(err)
 			}
+			tasksToDelete = nil
 		}
 	}
+
 }

@@ -264,38 +264,38 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	assert.Len(t, fixtureTasks, expectedTaskCount, "Count of tasks is not equal")
 }
 
-func TestDeleteBunch(t *testing.T) {
-	clear()
-
-	taskCount := 100
-	deleteInOneIteration := 50
-
-	fixtureTasks := NewFixtureTaskBuilder(appInstanceId).
-		AddTasksNotTaken(-100, taskCount).
-		AddTasksNotTaken(100, taskCount).
-		AddTasksTakenByCurrentInstance(-100, taskCount).
-		AddTasksTakenByCurrentInstance(100, taskCount).
-		AddTasksTakenByBrokenInstance(-100, taskCount).
-		AddTasksTakenByBrokenInstance(100, taskCount).
-		GetTasks()
-
-	loadFixtures(fixtureTasks)
-
-	var tasksToDelete = make([]*domain.Task, 0, 2000)
-	for _, taskFixture := range fixtureTasks {
-		tasksToDelete = append(tasksToDelete, &domain.Task{Id: taskFixture.Id})
-	}
-
-	for i := 0; i < len(tasksToDelete); i += deleteInOneIteration {
-		batch := tasksToDelete[i:min(i+deleteInOneIteration, len(tasksToDelete))]
-		err := repository.DeleteBunch(batch)
-		if err != nil {
-			log.Fatal(err, "Error while delete")
-		}
-	}
-
-	// TODO check in db
-}
+//func TestDeleteBunch(t *testing.T) {
+//	clear()
+//
+//	taskCount := 100
+//	deleteInOneIteration := 50
+//
+//	fixtureTasks := NewFixtureTaskBuilder(appInstanceId).
+//		AddTasksNotTaken(-100, taskCount).
+//		AddTasksNotTaken(100, taskCount).
+//		AddTasksTakenByCurrentInstance(-100, taskCount).
+//		AddTasksTakenByCurrentInstance(100, taskCount).
+//		AddTasksTakenByBrokenInstance(-100, taskCount).
+//		AddTasksTakenByBrokenInstance(100, taskCount).
+//		GetTasks()
+//
+//	loadFixtures(fixtureTasks)
+//
+//	var tasksToDelete = make([]*domain.Task, 0, 2000)
+//	for _, taskFixture := range fixtureTasks {
+//		tasksToDelete = append(tasksToDelete, &domain.Task{Id: taskFixture.Id})
+//	}
+//
+//	for i := 0; i < len(tasksToDelete); i += deleteInOneIteration {
+//		batch := tasksToDelete[i:min(i+deleteInOneIteration, len(tasksToDelete))]
+//		err := repository.DeleteBunch(batch)
+//		if err != nil {
+//			log.Fatal(err, "Error while delete")
+//		}
+//	}
+//
+//	// TODO check in db
+//}
 
 func TestCreate(t *testing.T) {
 	clear()

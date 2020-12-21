@@ -98,8 +98,11 @@ func TestOne(t *testing.T) {
 		fmt.Println("error:", eventError)
 	})
 
+	i := 0
 	triggerHook.SetTransport(func(task *domain.Task) {
-		if task.Id%1e+3 == 0 {
+		i++
+		if i == 1e+3 {
+			i = 0
 			fmt.Println("send:", task)
 		}
 	})

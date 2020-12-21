@@ -13,7 +13,7 @@ func NewWaitingTaskService(chPreloadedTasks <-chan domain.Task) contracts.Waitin
 	service := &waitingTaskService{
 		tasksWaitingList:   prioritized_task_list.NewHeapPrioritizedTaskList([]domain.Task{}),
 		chPreloadedTasks:   chPreloadedTasks,
-		chCanceledTasks:    make(chan int64, 10000000),
+		chCanceledTasks:    make(chan string, 10000000),
 		chTasksReadyToSend: make(chan domain.Task, 10000000),
 		mu:                 &sync.Mutex{},
 	}
@@ -24,7 +24,7 @@ func NewWaitingTaskService(chPreloadedTasks <-chan domain.Task) contracts.Waitin
 type waitingTaskService struct {
 	tasksWaitingList   contracts.PrioritizedTaskListInterface
 	chPreloadedTasks   <-chan domain.Task
-	chCanceledTasks    chan int64
+	chCanceledTasks    chan string
 	chTasksReadyToSend chan domain.Task
 	mu                 *sync.Mutex
 }
@@ -33,7 +33,7 @@ func (s *waitingTaskService) GetReadyToSendChan() <-chan domain.Task {
 	return s.chTasksReadyToSend
 }
 
-func (s *waitingTaskService) deleteTaskFromWaitingList(taskId int64) {
+func (s *waitingTaskService) deleteTaskFromWaitingList(taskId string) {
 	s.mu.Lock()
 	defer func() { s.mu.Unlock() }()
 	s.tasksWaitingList.DeleteIfExist(taskId)
@@ -51,7 +51,7 @@ func (s *waitingTaskService) takeTaskFromWaitingList() *domain.Task {
 	return s.tasksWaitingList.Take()
 }
 
-func (s *waitingTaskService) CancelIfExist(taskId int64) {
+func (s *waitingTaskService) CancelIfExist(taskId string) {
 	s.chCanceledTasks <- taskId
 }
 

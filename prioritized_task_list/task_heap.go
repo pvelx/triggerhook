@@ -8,7 +8,7 @@ import (
 
 func NewHeapPrioritizedTaskList(tasks []domain.Task) contracts.PrioritizedTaskListInterface {
 	pq := items{}
-	var index = make(map[int64]int)
+	var index = make(map[string]int)
 	i := 0
 	for _, task := range tasks {
 		pq = append(pq, &item{
@@ -27,7 +27,7 @@ func NewHeapPrioritizedTaskList(tasks []domain.Task) contracts.PrioritizedTaskLi
 type heapPrioritizedTaskList struct {
 	contracts.PrioritizedTaskListInterface
 	pq    items
-	index map[int64]int
+	index map[string]int
 }
 
 func (tqh *heapPrioritizedTaskList) Add(task *domain.Task) {
@@ -38,7 +38,7 @@ func (tqh *heapPrioritizedTaskList) Add(task *domain.Task) {
 	})
 }
 
-func (tqh *heapPrioritizedTaskList) DeleteIfExist(taskId int64) bool {
+func (tqh *heapPrioritizedTaskList) DeleteIfExist(taskId string) bool {
 	index, ok := tqh.index[taskId]
 	if ok {
 		heap.Remove(&tqh.pq, index)

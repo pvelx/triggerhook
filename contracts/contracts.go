@@ -14,7 +14,7 @@ type PrioritizedTaskListInterface interface {
 
 	//Searches for a task and deletes it
 	//return true when the task was deleted, false - when was not found
-	DeleteIfExist(taskId int64) bool
+	DeleteIfExist(taskId string) bool
 }
 
 type TaskSenderInterface interface {
@@ -25,19 +25,25 @@ type TaskSenderInterface interface {
 }
 
 type TaskManagerInterface interface {
-	Create(task *domain.Task, isTaken bool) error
+	Create(task []TaskToCreate) error
 	Delete(task domain.Task) error
-	GetTasksBySecToExecTime(secToExecTime int64, count int) ([]domain.Task, error)
-	CountReadyToExec(secToExecTime int64) (int, error)
-	ConfirmExecution(task *domain.Task) error
+	GetTasksBySecToExecTime(secToExecTime int64) (CollectionsInterface, error)
+	ConfirmExecution(task []*domain.Task) error
 }
 
+type TaskToCreate struct {
+	Task    *domain.Task
+	IsTaken bool
+}
+
+type CollectionsInterface interface {
+	Next() ([]domain.Task, error)
+}
 type RepositoryInterface interface {
-	Create(task *domain.Task, isTaken bool) error
-	//DeleteBunch(tasks []*domain.Task) error
-	ConfirmExecution(tasks *domain.Task) error
-	FindBySecToExecTime(secToNow int64, count int) (domain.Tasks, error)
-	CountReadyToExec(secToNow int64) (int, error)
+	Create(tasks []TaskToCreate) error
+	ConfirmExecution(tasks []*domain.Task) error
+	ClearEmptyCollection() error
+	FindBySecToExecTime(secToNow int64) (CollectionsInterface, error)
 	Up() error
 }
 
@@ -49,7 +55,7 @@ type PreloadingTaskServiceInterface interface {
 
 type WaitingTaskServiceInterface interface {
 	WaitUntilExecTime()
-	CancelIfExist(taskId int64)
+	CancelIfExist(taskId string)
 	GetReadyToSendChan() <-chan domain.Task
 }
 
@@ -76,7 +82,7 @@ type EventErrorHandlerInterface interface {
 
 type TasksDeferredInterface interface {
 	Create(execTime int64) (*domain.Task, error)
-	Delete(taskId int64) (bool, error)
+	Delete(taskId string) (bool, error)
 
 	//Setting the function with the desired message sending method (for example, RabbitMQ)
 	//YOU SHOULD TAKE CARE HANDLE EXCEPTIONS WHILE SEND IN THIS FUNCTION

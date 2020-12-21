@@ -15,8 +15,8 @@ type taskManager struct {
 	repo contracts.RepositoryInterface
 }
 
-func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
-	if err := s.repo.Create(task, isTaken); err != nil {
+func (s *taskManager) Create(tasks []contracts.TaskToCreate) error {
+	if err := s.repo.Create(tasks); err != nil {
 		err := errors.New(err.Error())
 		return err
 	}
@@ -30,18 +30,22 @@ func (s *taskManager) Delete(task domain.Task) error {
 	return nil
 }
 
-func (s *taskManager) CountReadyToExec(secToExecTime int64) (int, error) {
-	return s.repo.CountReadyToExec(secToExecTime)
-}
-
-func (s *taskManager) GetTasksBySecToExecTime(secToExecTime int64, count int) ([]domain.Task, error) {
-	tasksToExec, err := s.repo.FindBySecToExecTime(secToExecTime, count)
+func (s *taskManager) GetTasksBySecToExecTime(secToExecTime int64) (contracts.CollectionsInterface, error) {
+	tasksToExec, err := s.repo.FindBySecToExecTime(secToExecTime)
 	if err != nil {
 		return nil, err
 	}
 	return tasksToExec, nil
 }
 
-func (s *taskManager) ConfirmExecution(task *domain.Task) error {
-	return s.repo.ConfirmExecution(task)
+func (s *taskManager) ConfirmExecution(task []*domain.Task) error {
+	errDelete := s.repo.ConfirmExecution(task)
+	if errDelete != nil {
+		return errDelete
+	}
+	errClear := s.repo.ClearEmptyCollection()
+	if errClear != nil {
+		return errClear
+	}
+	return nil
 }

@@ -58,7 +58,7 @@ func (s *triggerHook) SetErrorHandler(externalErrorHandler func(event contracts.
 	s.eventErrorHandler.SetErrorHandler(externalErrorHandler)
 }
 
-func (s *triggerHook) Delete(taskId int64) (bool, error) {
+func (s *triggerHook) Delete(taskId string) (bool, error) {
 	s.waitingTaskService.CancelIfExist(taskId)
 	if err := s.taskManager.Delete(domain.Task{Id: taskId}); err != nil {
 		return false, err
