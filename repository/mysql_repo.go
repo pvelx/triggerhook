@@ -30,24 +30,26 @@ type mysqlRepo struct {
 }
 
 func (r *mysqlRepo) Create(tasks []contracts.TaskToCreate) error {
+	ctx := context.Background()
+	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelReadCommitted,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	createCollectionQuery := "INSERT INTO collection (exec_time, taken_by_instance)"
-	q := "INSERT INTO task (uuid, exec_time, collection_id)"
+	createTaskQuery := "INSERT INTO task (uuid, exec_time, collection_id)"
 
 	var createCollectionArg []interface{}
 	var createTasksArg []interface{}
 	var execTimes = make(map[int64]bool)
 	for i, item := range tasks {
-		op := "!="
-		if item.IsTaken {
-			op = "="
-		}
-
 		if _, execTime := execTimes[item.Task.ExecTime]; !execTime {
-			execTimes[item.Task.ExecTime] = true
-
+			collectionQueryOp := "!="
 			appInstanceId := ""
 			if item.IsTaken {
+				collectionQueryOp = "="
 				appInstanceId = r.appInstanceId
 			}
 			createCollectionArg = append(
@@ -56,73 +58,77 @@ func (r *mysqlRepo) Create(tasks []contracts.TaskToCreate) error {
 				appInstanceId,
 				item.Task.ExecTime,
 				item.Task.ExecTime+1,
-				appInstanceId,
+				r.appInstanceId,
 				1000,
 			)
+
+			if len(execTimes) != 0 {
+				createCollectionQuery = createCollectionQuery + `
+				UNION `
+			}
 
 			createCollectionQuery = createCollectionQuery + fmt.Sprintf(`
 			SELECT ?, ?
 			WHERE NOT EXISTS(
-					SELECT c.*, count(t.id) as task_count
+					SELECT c.*, count(t.uuid) as task_count
 				FROM collection c
 				LEFT JOIN task t on c.id = t.collection_id
 				WHERE c.exec_time >= ?
 					AND c.exec_time < ?
 					AND c.taken_by_instance %s ?
 				GROUP BY c.id
-				HAVING count(c.id) < ?)`, op)
+				HAVING count(c.id) < ?)`, collectionQueryOp)
 
-			if len(tasks)-1 > i {
-				createCollectionQuery = createCollectionQuery + `
-				UNION `
-			}
+			execTimes[item.Task.ExecTime] = true
+		}
+
+		opTaskQuery := "!="
+		if item.IsTaken {
+			opTaskQuery = "="
 		}
 
 		if item.Task.Id == "" {
 			item.Task.Id = uuid.NewV4().String()
 		}
 
-		q = q + fmt.Sprintf(`
+		if i != 0 {
+			createTaskQuery = createTaskQuery + `
+				UNION `
+		}
+		createTaskQuery = createTaskQuery + fmt.Sprintf(`
 			SELECT ?, ?, (
 				SELECT id
 				FROM collection
 				WHERE exec_time = ?
-				AND taken_by_instance %s ?)`, op)
-
-		if len(tasks)-1 > i {
-			q = q + `
-				UNION `
-		}
+				AND taken_by_instance %s ? LIMIT 1)`, opTaskQuery)
 
 		createTasksArg = append(createTasksArg, item.Task.Id, item.Task.ExecTime, item.Task.ExecTime, r.appInstanceId)
 	}
+	_, createCollectionsErr := tx.ExecContext(ctx, createCollectionQuery, createCollectionArg...)
+	if createCollectionsErr != nil {
+		if errRollback := tx.Rollback(); errRollback != nil {
+			log.Fatal(errRollback)
+		}
 
-	stmt2, err2 := r.client.Prepare(q)
-	if err2 != nil {
-		return errors.Wrap(err2, "database error")
+		return errors.Wrap(createCollectionsErr, "database error")
 	}
 
-	stmt, err := r.client.Prepare(q)
-	if err != nil {
-		return errors.Wrap(err, "database error")
-	}
-	defer stmt.Close()
-	defer stmt2.Close()
-
-	_, saveCollectionsErr := stmt2.Exec(createCollectionArg)
-	if saveCollectionsErr != nil {
-		return errors.Wrap(saveCollectionsErr, "database error")
+	_, createTaskErr := tx.ExecContext(ctx, createTaskQuery, createTasksArg...)
+	if createTaskErr != nil {
+		if errRollback := tx.Rollback(); errRollback != nil {
+			log.Fatal(errRollback)
+		}
+		return errors.Wrap(createTaskErr, "database error")
 	}
 
-	_, saveErr := stmt.Exec(createTasksArg)
-	if saveErr != nil {
-		return errors.Wrap(saveErr, "database error")
+	if errCommit := tx.Commit(); errCommit != nil {
+		log.Fatal(errCommit)
 	}
 
 	return nil
 }
 
-func (r *mysqlRepo) ConfirmExecution(tasks []*domain.Task) error {
+func (r *mysqlRepo) Delete(tasks []*domain.Task) error {
 	if len(tasks) == 0 {
 		return nil
 	}
@@ -154,6 +160,10 @@ func (r *mysqlRepo) ConfirmExecution(tasks []*domain.Task) error {
 	}
 
 	if err = tx.Commit(); err != nil {
+		log.Fatal(err)
+	}
+
+	if err = r.ClearEmptyCollection(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -212,6 +222,10 @@ func (r *mysqlRepo) getTasksByCollection(collectionId int64) (domain.Tasks, erro
 			return nil, errors.Wrap(getErr, "getting tasks was fail")
 		}
 		results = append(results, task)
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Fatal(err)
 	}
 
 	return results, nil
@@ -288,23 +302,45 @@ func (r *mysqlRepo) FindBySecToExecTime(secToNow int64) (contracts.CollectionsIn
 
 func (r *mysqlRepo) Up() error {
 	ctx := context.Background()
+	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	query := `create table IF NOT EXISTS task
+	query1 := `create table if not exists collection
 		(
 			id bigint auto_increment primary key,
-			exec_time int default 0 NOT NULL,
-			taken_by_instance varchar(36) default '' NOT NULL
+			exec_time int not null,
+			taken_by_instance varchar(36) default '' not null,
+			index (exec_time)
 		)`
 
-	stmt, err := r.client.PrepareContext(ctx, query)
-	if err != nil {
-		return err
+	_, err1 := tx.ExecContext(ctx, query1)
+	if err1 != nil {
+		tx.Rollback()
+		return err1
 	}
-	defer stmt.Close()
-	_, err = stmt.ExecContext(ctx)
-	if err != nil {
-		return err
+
+	query2 := `create table if not exists task
+		(
+			uuid varchar(36) not null primary key,
+			exec_time int default 0 not null,
+			collection_id bigint not null,
+			constraint task_collection_id_fk foreign key (collection_id) references collection (id)
+		)`
+
+	_, err2 := tx.ExecContext(ctx, query2)
+	if err2 != nil {
+		tx.Rollback()
+		return err2
 	}
+
+	if err = tx.Commit(); err != nil {
+		log.Fatal(err)
+	}
+
 	return nil
 }
 
@@ -314,29 +350,33 @@ type Collections struct {
 	r           *mysqlRepo
 }
 
-func (c *Collections) takeCollectionId() (int64, bool) {
+func (c *Collections) takeCollectionId() (id int64, isEnd bool) {
 	c.mx.Lock()
 	defer func() {
 		c.mx.Unlock()
 	}()
 	if len(c.collections) == 0 {
-		return 0, false
+		return 0, true
 	}
-	collectionId := c.collections[0]
+	id = c.collections[0]
 	c.collections = c.collections[1:]
 
-	return collectionId, true
+	return id, false
 }
 
-func (c *Collections) Next() ([]domain.Task, error) {
-	collectionId, ok := c.takeCollectionId()
-	if !ok {
-		return []domain.Task{}, nil
+func (c *Collections) Next() (tasks []domain.Task, isEnd bool, err error) {
+	err = nil
+	var id int64
+	id, isEnd = c.takeCollectionId()
+	if isEnd {
+		return
 	}
 
-	tasks, err := c.r.getTasksByCollection(collectionId)
+	tasks, err = c.r.getTasksByCollection(id)
 	if err != nil {
-		return nil, errors.New("something wrong")
+		err = errors.New("something wrong")
+		return
 	}
-	return tasks, nil
+
+	return
 }

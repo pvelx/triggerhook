@@ -27,28 +27,36 @@ func (s *preloadingTaskService) GetPreloadedChan() <-chan domain.Task {
 	return s.chPreloadedTask
 }
 
-func (s *preloadingTaskService) AddNewTask(execTime int64) (*domain.Task, error) {
-	task := domain.Task{
-		ExecTime: execTime,
-	}
-	relativeTimeToExec := execTime - time.Now().Unix()
+func (s *preloadingTaskService) AddNewTask(tasks []*domain.Task) error {
 
-	isTaken := s.timePreload > relativeTimeToExec
+	var taskToCreateContainer []contracts.TaskToCreate
+	for _, task := range tasks {
+		relativeTimeToExec := task.ExecTime - time.Now().Unix()
 
-	if err := s.taskManager.Create([]contracts.TaskToCreate{{&task, isTaken}}); err != nil {
-		return nil, err
+		taskToCreateContainer = append(
+			taskToCreateContainer,
+			contracts.TaskToCreate{Task: task, IsTaken: s.timePreload > relativeTimeToExec},
+		)
 	}
-	if isTaken {
-		s.chPreloadedTask <- task
+
+	if err := s.taskManager.Create(taskToCreateContainer); err != nil {
+		return err
 	}
-	return &task, nil
+
+	for _, taskToCreate := range taskToCreateContainer {
+		if taskToCreate.IsTaken {
+			s.chPreloadedTask <- *taskToCreate.Task
+		}
+	}
+
+	return nil
 }
 
 func (s *preloadingTaskService) Preload() {
 	countFails := 0
 
 	for {
-		collection, err := s.taskManager.GetTasksBySecToExecTime(s.timePreload)
+		collection, err := s.taskManager.GetTasksToComplete(s.timePreload)
 		if err != nil {
 			countFails++
 			time.Sleep(time.Duration(s.timePreload) * 300 * time.Millisecond)
@@ -60,25 +68,27 @@ func (s *preloadingTaskService) Preload() {
 		}
 		countFails = 0
 
-		workersCount := 5
+		workersCount := 10
 		for worker := 0; worker < workersCount; worker++ {
 			//workerNum := worker
 			go func() {
 				for {
-					tasksToExec, err := collection.Next()
-
-					if len(tasksToExec) == 0 {
-						fmt.Printf("break")
-						continue
-					}
-					//fmt.Printf("workerId: %d - %d", workerNum, len(tasksToExec))
-					//fmt.Println()
-
+					tasks, isEnd, err := collection.Next()
 					if err != nil {
 						panic("Cannot get tasks for doing")
 						return
 					}
-					for _, task := range tasksToExec {
+					if isEnd {
+						fmt.Printf("break")
+						break
+					}
+					if len(tasks) == 0 {
+						continue
+					}
+					//fmt.Printf("workerId: %d - %d", workerNum, len(tasks))
+					//fmt.Println()
+
+					for _, task := range tasks {
 						s.chPreloadedTask <- task
 					}
 				}

@@ -23,14 +23,14 @@ func (s *taskManager) Create(tasks []contracts.TaskToCreate) error {
 	return nil
 }
 
-func (s *taskManager) Delete(task domain.Task) error {
-	//if err := s.repo.DeleteBunch([]*domain.Task{&task}); err != nil {
-	//	return err
-	//}
+func (s *taskManager) Delete(task []*domain.Task) error {
+	if err := s.repo.Delete(task); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (s *taskManager) GetTasksBySecToExecTime(secToExecTime int64) (contracts.CollectionsInterface, error) {
+func (s *taskManager) GetTasksToComplete(secToExecTime int64) (contracts.CollectionsInterface, error) {
 	tasksToExec, err := s.repo.FindBySecToExecTime(secToExecTime)
 	if err != nil {
 		return nil, err
@@ -39,13 +39,9 @@ func (s *taskManager) GetTasksBySecToExecTime(secToExecTime int64) (contracts.Co
 }
 
 func (s *taskManager) ConfirmExecution(task []*domain.Task) error {
-	errDelete := s.repo.ConfirmExecution(task)
+	errDelete := s.repo.Delete(task)
 	if errDelete != nil {
 		return errDelete
-	}
-	errClear := s.repo.ClearEmptyCollection()
-	if errClear != nil {
-		return errClear
 	}
 	return nil
 }
