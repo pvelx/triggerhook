@@ -29,7 +29,7 @@ type mysqlRepo struct {
 	appInstanceId string
 }
 
-func (r *mysqlRepo) Create(tasks []contracts.TaskToCreate) error {
+func (r *mysqlRepo) Create(task *domain.Task, isTaken bool) error {
 	ctx := context.Background()
 	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelReadCommitted,
@@ -38,87 +38,86 @@ func (r *mysqlRepo) Create(tasks []contracts.TaskToCreate) error {
 		log.Fatal(err)
 	}
 
-	createCollectionQuery := "INSERT INTO collection (exec_time, taken_by_instance)"
-	createTaskQuery := "INSERT INTO task (uuid, exec_time, collection_id)"
-
-	var createCollectionArg []interface{}
-	var createTasksArg []interface{}
-	var execTimes = make(map[int64]bool)
-	for i, item := range tasks {
-		if _, execTime := execTimes[item.Task.ExecTime]; !execTime {
-			collectionQueryOp := "!="
-			appInstanceId := ""
-			if item.IsTaken {
-				collectionQueryOp = "="
-				appInstanceId = r.appInstanceId
-			}
-			createCollectionArg = append(
-				createCollectionArg,
-				item.Task.ExecTime,
-				appInstanceId,
-				item.Task.ExecTime,
-				item.Task.ExecTime+1,
-				r.appInstanceId,
-				1000,
-			)
-
-			if len(execTimes) != 0 {
-				createCollectionQuery = createCollectionQuery + `
-				UNION `
-			}
-
-			createCollectionQuery = createCollectionQuery + fmt.Sprintf(`
-			SELECT ?, ?
-			WHERE NOT EXISTS(
-					SELECT c.*, count(t.uuid) as task_count
-				FROM collection c
-				LEFT JOIN task t on c.id = t.collection_id
-				WHERE c.exec_time >= ?
-					AND c.exec_time < ?
-					AND c.taken_by_instance %s ?
-				GROUP BY c.id
-				HAVING count(c.id) < ?)`, collectionQueryOp)
-
-			execTimes[item.Task.ExecTime] = true
-		}
-
-		opTaskQuery := "!="
-		if item.IsTaken {
-			opTaskQuery = "="
-		}
-
-		if item.Task.Id == "" {
-			item.Task.Id = uuid.NewV4().String()
-		}
-
-		if i != 0 {
-			createTaskQuery = createTaskQuery + `
-				UNION `
-		}
-		createTaskQuery = createTaskQuery + fmt.Sprintf(`
-			SELECT ?, ?, (
-				SELECT id
-				FROM collection
-				WHERE exec_time = ?
-				AND taken_by_instance %s ? LIMIT 1)`, opTaskQuery)
-
-		createTasksArg = append(createTasksArg, item.Task.Id, item.Task.ExecTime, item.Task.ExecTime, r.appInstanceId)
+	if task.Id == "" {
+		task.Id = uuid.NewV4().String()
 	}
-	_, createCollectionsErr := tx.ExecContext(ctx, createCollectionQuery, createCollectionArg...)
-	if createCollectionsErr != nil {
+
+	collectionQueryOp := "!="
+	appInstanceId := ""
+	if isTaken {
+		collectionQueryOp = "="
+		appInstanceId = r.appInstanceId
+	}
+
+	findCollectionQuery := fmt.Sprintf(`SELECT c.id
+		FROM collection c
+		LEFT JOIN task t on c.id = t.collection_id
+		WHERE c.exec_time >= ?
+			AND c.exec_time < ?
+			AND c.taken_by_instance %s ?
+		GROUP BY c.id
+		HAVING count(t.uuid) < ? 
+		LIMIT 1`, collectionQueryOp)
+
+	var collectionId int64
+	findingResult, findCollectionErr := tx.QueryContext(ctx, findCollectionQuery, task.ExecTime, task.ExecTime+1, r.appInstanceId, 1000)
+	if findCollectionErr != nil {
 		if errRollback := tx.Rollback(); errRollback != nil {
 			log.Fatal(errRollback)
 		}
 
-		return errors.Wrap(createCollectionsErr, "database error")
+		return errors.Wrap(findCollectionErr, "find collection error")
 	}
 
-	_, createTaskErr := tx.ExecContext(ctx, createTaskQuery, createTasksArg...)
+	if findingResult.Next() {
+		scanCollectionErr := findingResult.Scan(&collectionId)
+		if scanCollectionErr != nil {
+			if errRollback := tx.Rollback(); errRollback != nil {
+				log.Fatal(errRollback)
+			}
+
+			return errors.Wrap(findCollectionErr, "scan collection error")
+		}
+	}
+	findingResult.Close()
+
+	if collectionId == 0 {
+		creatingCollectionResult, createCollectionsErr := tx.ExecContext(
+			ctx,
+			"INSERT INTO collection (exec_time, taken_by_instance) VALUE (?, ?)",
+			task.ExecTime,
+			appInstanceId,
+		)
+		if createCollectionsErr != nil {
+			if errRollback := tx.Rollback(); errRollback != nil {
+				log.Fatal(errRollback)
+			}
+
+			return errors.Wrap(createCollectionsErr, "creating collection is fail")
+		}
+
+		collectionId, createCollectionsErr = creatingCollectionResult.LastInsertId()
+		if createCollectionsErr != nil {
+			if errRollback := tx.Rollback(); errRollback != nil {
+				log.Fatal(errRollback)
+			}
+
+			return errors.Wrap(createCollectionsErr, "creating collection is fail")
+		}
+	}
+
+	_, createTaskErr := tx.ExecContext(
+		ctx, "INSERT INTO task (uuid, exec_time, collection_id) VALUE (?, ?, ?)",
+		task.Id,
+		task.ExecTime,
+		collectionId,
+	)
 	if createTaskErr != nil {
 		if errRollback := tx.Rollback(); errRollback != nil {
 			log.Fatal(errRollback)
 		}
-		return errors.Wrap(createTaskErr, "database error")
+
+		return errors.Wrap(createTaskErr, "creating task is fail")
 	}
 
 	if errCommit := tx.Commit(); errCommit != nil {

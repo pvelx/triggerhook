@@ -15,16 +15,16 @@ type taskManager struct {
 	repo contracts.RepositoryInterface
 }
 
-func (s *taskManager) Create(tasks []contracts.TaskToCreate) error {
-	if err := s.repo.Create(tasks); err != nil {
+func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
+	if err := s.repo.Create(task, isTaken); err != nil {
 		err := errors.New(err.Error())
 		return err
 	}
 	return nil
 }
 
-func (s *taskManager) Delete(task []*domain.Task) error {
-	if err := s.repo.Delete(task); err != nil {
+func (s *taskManager) Delete(task *domain.Task) error {
+	if err := s.repo.Delete([]*domain.Task{task}); err != nil {
 		return err
 	}
 	return nil

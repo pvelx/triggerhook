@@ -27,26 +27,16 @@ func (s *preloadingTaskService) GetPreloadedChan() <-chan domain.Task {
 	return s.chPreloadedTask
 }
 
-func (s *preloadingTaskService) AddNewTask(tasks []*domain.Task) error {
+func (s *preloadingTaskService) AddNewTask(task *domain.Task) error {
+	relativeTimeToExec := task.ExecTime - time.Now().Unix()
+	isTaken := s.timePreload > relativeTimeToExec
 
-	var taskToCreateContainer []contracts.TaskToCreate
-	for _, task := range tasks {
-		relativeTimeToExec := task.ExecTime - time.Now().Unix()
-
-		taskToCreateContainer = append(
-			taskToCreateContainer,
-			contracts.TaskToCreate{Task: task, IsTaken: s.timePreload > relativeTimeToExec},
-		)
-	}
-
-	if err := s.taskManager.Create(taskToCreateContainer); err != nil {
+	if err := s.taskManager.Create(task, isTaken); err != nil {
 		return err
 	}
 
-	for _, taskToCreate := range taskToCreateContainer {
-		if taskToCreate.IsTaken {
-			s.chPreloadedTask <- *taskToCreate.Task
-		}
+	if isTaken {
+		s.chPreloadedTask <- *task
 	}
 
 	return nil

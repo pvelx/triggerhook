@@ -25,30 +25,26 @@ type TaskSenderInterface interface {
 }
 
 type TaskManagerInterface interface {
-	Create(task []TaskToCreate) error
-	Delete(task []*domain.Task) error
+	Create(task *domain.Task, isTaken bool) error
+	Delete(task *domain.Task) error
 	GetTasksToComplete(secToExecTime int64) (CollectionsInterface, error)
 	ConfirmExecution(task []*domain.Task) error
-}
-
-type TaskToCreate struct {
-	Task    *domain.Task
-	IsTaken bool
 }
 
 type CollectionsInterface interface {
 	Next() (tasks []domain.Task, isEnd bool, err error)
 }
+
 type RepositoryInterface interface {
-	Create(tasks []TaskToCreate) error
-	Delete(tasks []*domain.Task) error
+	Create(task *domain.Task, isTaken bool) error
+	Delete(task []*domain.Task) error
 	ClearEmptyCollection() error
 	FindBySecToExecTime(secToNow int64) (CollectionsInterface, error)
 	Up() error
 }
 
 type PreloadingTaskServiceInterface interface {
-	AddNewTask(tasks []*domain.Task) error
+	AddNewTask(task *domain.Task) error
 	GetPreloadedChan() <-chan domain.Task
 	Preload()
 }
@@ -81,8 +77,8 @@ type EventErrorHandlerInterface interface {
 }
 
 type TasksDeferredInterface interface {
-	Create(tasks []*domain.Task) error
-	Delete(tasks []*domain.Task) (bool, error)
+	Create(task *domain.Task) error
+	Delete(task *domain.Task) (bool, error)
 
 	//Setting the function with the desired message sending method (for example, RabbitMQ)
 	//YOU SHOULD TAKE CARE HANDLE EXCEPTIONS WHILE SEND IN THIS FUNCTION
