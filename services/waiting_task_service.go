@@ -39,7 +39,7 @@ func (s *waitingTaskService) deleteTaskFromWaitingList(taskId string) {
 	s.tasksWaitingList.DeleteIfExist(taskId)
 }
 
-func (s *waitingTaskService) addTaskToWaitingList(task *domain.Task) {
+func (s *waitingTaskService) addTaskToWaitingList(task domain.Task) {
 	s.mu.Lock()
 	defer func() { s.mu.Unlock() }()
 	s.tasksWaitingList.Add(task)
@@ -70,7 +70,7 @@ func (s *waitingTaskService) WaitUntilExecTime() {
 				}
 			case task, ok := <-s.chPreloadedTasks:
 				if ok {
-					s.addTaskToWaitingList(&task)
+					s.addTaskToWaitingList(task)
 					updatedQueue <- true
 				} else {
 					panic("chan was closed")
@@ -103,7 +103,7 @@ func (s *waitingTaskService) WaitUntilExecTime() {
 					<-timer.C
 				}
 				if task != nil {
-					s.addTaskToWaitingList(task)
+					s.addTaskToWaitingList(*task)
 				}
 
 				continue

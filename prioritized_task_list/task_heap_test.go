@@ -2,6 +2,7 @@ package prioritized_task_list
 
 import (
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
@@ -22,11 +23,11 @@ func TestShuffleTask(t *testing.T) {
 	}
 }
 
-func getShuffleTasks(countOfTasks int64) []*domain.Task {
+func getShuffleTasks(countOfTasks int64) []domain.Task {
 	rand.Seed(time.Now().UnixNano())
-	tasks := make([]*domain.Task, 0, countOfTasks)
+	tasks := make([]domain.Task, 0, countOfTasks)
 	for i := int64(0); i < countOfTasks; i++ {
-		tasks = append(tasks, &domain.Task{Id: i, ExecTime: i})
+		tasks = append(tasks, domain.Task{Id: uuid.NewV4().String(), ExecTime: i})
 	}
 	rand.Shuffle(len(tasks), func(i, j int) { tasks[i], tasks[j] = tasks[j], tasks[i] })
 

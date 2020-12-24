@@ -3,6 +3,7 @@ package services
 import (
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
@@ -11,16 +12,16 @@ import (
 
 type taskManagerMock struct {
 	contracts.TaskManagerInterface
-	confirmExecutionMock func(tasks []*domain.Task) error
+	confirmExecutionMock func(tasks []domain.Task) error
 }
 
-func (tm *taskManagerMock) ConfirmExecution(tasks []*domain.Task) error {
+func (tm *taskManagerMock) ConfirmExecution(tasks []domain.Task) error {
 	return tm.confirmExecutionMock(tasks)
 }
 
 func createReadyToSendTask(chTaskReadyToSend chan domain.Task, count int) {
 	for i := 0; i < count; i++ {
-		chTaskReadyToSend <- domain.Task{}
+		chTaskReadyToSend <- domain.Task{Id: uuid.NewV4().String(), ExecTime: time.Now().Unix()}
 	}
 }
 
@@ -29,7 +30,7 @@ func TestTaskSender(t *testing.T) {
 	expected := []int{400, 1000, 500, 1000, 1000, 1000, 300}
 
 	chTaskReadyToSend := make(chan domain.Task, 10000000)
-	taskManagerMock := &taskManagerMock{confirmExecutionMock: func(tasks []*domain.Task) error {
+	taskManagerMock := &taskManagerMock{confirmExecutionMock: func(tasks []domain.Task) error {
 		mu.Lock()
 		if len(expected) == 0 {
 			assert.Fail(t, "expected values ware end")
@@ -44,7 +45,7 @@ func TestTaskSender(t *testing.T) {
 	}}
 
 	service := NewTaskSender(taskManagerMock, chTaskReadyToSend, nil)
-	service.SetTransport(func(task *domain.Task) {})
+	service.SetTransport(func(task domain.Task) {})
 
 	go service.Send()
 

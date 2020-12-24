@@ -18,7 +18,7 @@ func init() {
 func Default(client *sql.DB) contracts.TasksDeferredInterface {
 	eventErrorHandler := services.NewEventErrorHandler()
 
-	repo := repository.NewRepository(client, appInstanceId)
+	repo := repository.NewRepository(client, appInstanceId, eventErrorHandler)
 	if err := repo.Up(); err != nil {
 		panic(err)
 	}
@@ -31,6 +31,7 @@ func Default(client *sql.DB) contracts.TasksDeferredInterface {
 	senderService := services.NewTaskSender(
 		taskManager,
 		waitingTaskService.GetReadyToSendChan(),
+		nil,
 	)
 
 	return &triggerHook{
@@ -50,7 +51,7 @@ type triggerHook struct {
 	eventErrorHandler     contracts.EventErrorHandlerInterface
 }
 
-func (s *triggerHook) SetTransport(externalSender func(task *domain.Task)) {
+func (s *triggerHook) SetTransport(externalSender func(task domain.Task)) {
 	s.senderService.SetTransport(externalSender)
 }
 
@@ -58,7 +59,7 @@ func (s *triggerHook) SetErrorHandler(externalErrorHandler func(event contracts.
 	s.eventErrorHandler.SetErrorHandler(externalErrorHandler)
 }
 
-func (s *triggerHook) Delete(task *domain.Task) (bool, error) {
+func (s *triggerHook) Delete(task domain.Task) (bool, error) {
 	if err := s.taskManager.Delete(task); err != nil {
 		return false, err
 	}
@@ -67,7 +68,7 @@ func (s *triggerHook) Delete(task *domain.Task) (bool, error) {
 	return true, nil
 }
 
-func (s *triggerHook) Create(task *domain.Task) error {
+func (s *triggerHook) Create(task domain.Task) error {
 	return s.preloadingTaskService.AddNewTask(task)
 }
 

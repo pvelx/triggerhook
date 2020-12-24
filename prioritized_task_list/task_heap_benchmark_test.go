@@ -2,6 +2,7 @@ package prioritized_task_list
 
 import (
 	"github.com/pvelx/triggerHook/domain"
+	uuid "github.com/satori/go.uuid"
 	"math/rand"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ func BenchmarkAdd(b *testing.B) {
 	priorityList := NewHeapPrioritizedTaskList([]domain.Task{})
 	for n := 0; n < b.N; n++ {
 		execTime := int64(rand.Intn(1000000))
-		priorityList.Add(&domain.Task{Id: int64(n), ExecTime: execTime})
+		priorityList.Add(domain.Task{Id: uuid.NewV4().String(), ExecTime: execTime})
 	}
 }
 
@@ -22,7 +23,7 @@ func BenchmarkTake(b *testing.B) {
 	priorityList := NewHeapPrioritizedTaskList([]domain.Task{})
 	countOfTasks := int64(3e+6)
 	for i := int64(0); i < countOfTasks; i++ {
-		priorityList.Add(&domain.Task{Id: i, ExecTime: i})
+		priorityList.Add(domain.Task{Id: uuid.NewV4().String(), ExecTime: i})
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -35,7 +36,7 @@ func BenchmarkBoth(b *testing.B) {
 	priorityList := NewHeapPrioritizedTaskList([]domain.Task{})
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		priorityList.Add(&domain.Task{Id: int64(n), ExecTime: int64(n)})
+		priorityList.Add(domain.Task{Id: uuid.NewV4().String(), ExecTime: int64(n)})
 		priorityList.Take()
 	}
 }

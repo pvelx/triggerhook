@@ -15,7 +15,7 @@ type taskManager struct {
 	repo contracts.RepositoryInterface
 }
 
-func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
+func (s *taskManager) Create(task domain.Task, isTaken bool) error {
 	if err := s.repo.Create(task, isTaken); err != nil {
 		err := errors.New(err.Error())
 		return err
@@ -23,8 +23,8 @@ func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
 	return nil
 }
 
-func (s *taskManager) Delete(task *domain.Task) error {
-	if err := s.repo.Delete([]*domain.Task{task}); err != nil {
+func (s *taskManager) Delete(task domain.Task) error {
+	if err := s.repo.Delete([]domain.Task{task}); err != nil {
 		return err
 	}
 	return nil
@@ -38,7 +38,7 @@ func (s *taskManager) GetTasksToComplete(secToExecTime int64) (contracts.Collect
 	return tasksToExec, nil
 }
 
-func (s *taskManager) ConfirmExecution(task []*domain.Task) error {
+func (s *taskManager) ConfirmExecution(task []domain.Task) error {
 	errDelete := s.repo.Delete(task)
 	if errDelete != nil {
 		return errDelete

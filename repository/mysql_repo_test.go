@@ -170,7 +170,7 @@ func TestFindBySecToExecTime(t *testing.T) {
 
 	var tasksFound = make([]domain.Task, 0, 2000)
 	for i := 0; i < len(expectedCountTaskOnIteration); i++ {
-		tasks, err := repository.FindBySecToExecTime(5, chunkTaskSize)
+		tasks, err := repository.FindBySecToExecTime(5)
 		if err != nil {
 			log.Fatal(err, "Error while get tasks")
 		}
@@ -199,7 +199,6 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	clear()
 
 	expectedTaskCount := 1000
-	chunkTaskSize := 25
 	workersCount := 20
 	countRequestForWorker := 3
 
@@ -224,7 +223,7 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 			<-startWorkers
 
 			for i := 0; i < countRequestForWorker; i++ {
-				tasks, err := repository.FindBySecToExecTime(0, chunkTaskSize)
+				tasks, err := repository.FindBySecToExecTime(0)
 				if err != nil {
 					log.Fatal(err, "Error while get tasks")
 				}

@@ -7,7 +7,7 @@ import (
 type PrioritizedTaskListInterface interface {
 
 	//Add a task to the list based on priority
-	Add(task *domain.Task)
+	Add(task domain.Task)
 
 	//Take the most prioritized task and delete from list
 	Take() *domain.Task
@@ -21,14 +21,14 @@ type TaskSenderInterface interface {
 	Send()
 
 	//Setting the function with the desired message sending method
-	SetTransport(func(task *domain.Task))
+	SetTransport(func(task domain.Task))
 }
 
 type TaskManagerInterface interface {
-	Create(task *domain.Task, isTaken bool) error
-	Delete(task *domain.Task) error
+	Create(task domain.Task, isTaken bool) error
+	Delete(task domain.Task) error
 	GetTasksToComplete(secToExecTime int64) (CollectionsInterface, error)
-	ConfirmExecution(task []*domain.Task) error
+	ConfirmExecution(task []domain.Task) error
 }
 
 type CollectionsInterface interface {
@@ -36,15 +36,14 @@ type CollectionsInterface interface {
 }
 
 type RepositoryInterface interface {
-	Create(task *domain.Task, isTaken bool) error
-	Delete(task []*domain.Task) error
-	ClearEmptyCollection() error
+	Create(task domain.Task, isTaken bool) error
+	Delete(task []domain.Task) error
 	FindBySecToExecTime(secToNow int64) (CollectionsInterface, error)
 	Up() error
 }
 
 type PreloadingTaskServiceInterface interface {
-	AddNewTask(task *domain.Task) error
+	AddNewTask(task domain.Task) error
 	GetPreloadedChan() <-chan domain.Task
 	Preload()
 }
@@ -77,12 +76,12 @@ type EventErrorHandlerInterface interface {
 }
 
 type TasksDeferredInterface interface {
-	Create(task *domain.Task) error
-	Delete(task *domain.Task) (bool, error)
+	Create(task domain.Task) error
+	Delete(task domain.Task) (bool, error)
 
 	//Setting the function with the desired message sending method (for example, RabbitMQ)
 	//YOU SHOULD TAKE CARE HANDLE EXCEPTIONS WHILE SEND IN THIS FUNCTION
-	SetTransport(func(task *domain.Task))
+	SetTransport(func(task domain.Task))
 
 	//Configure the function using the desired error handler (for example, file logger, Sentry or other)
 	SetErrorHandler(func(EventError))

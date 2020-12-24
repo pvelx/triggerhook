@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
+	"sync"
 	"time"
 )
 
@@ -27,7 +28,7 @@ func (s *preloadingTaskService) GetPreloadedChan() <-chan domain.Task {
 	return s.chPreloadedTask
 }
 
-func (s *preloadingTaskService) AddNewTask(task *domain.Task) error {
+func (s *preloadingTaskService) AddNewTask(task domain.Task) error {
 	relativeTimeToExec := task.ExecTime - time.Now().Unix()
 	isTaken := s.timePreload > relativeTimeToExec
 
@@ -36,7 +37,7 @@ func (s *preloadingTaskService) AddNewTask(task *domain.Task) error {
 	}
 
 	if isTaken {
-		s.chPreloadedTask <- *task
+		s.chPreloadedTask <- task
 	}
 
 	return nil
@@ -46,6 +47,7 @@ func (s *preloadingTaskService) Preload() {
 	countFails := 0
 
 	for {
+		now := time.Now()
 		collection, err := s.taskManager.GetTasksToComplete(s.timePreload)
 		if err != nil {
 			countFails++
@@ -58,10 +60,12 @@ func (s *preloadingTaskService) Preload() {
 		}
 		countFails = 0
 
+		var wg sync.WaitGroup
 		workersCount := 10
 		for worker := 0; worker < workersCount; worker++ {
 			//workerNum := worker
-			go func() {
+			wg.Add(1)
+			go func(wg *sync.WaitGroup) {
 				for {
 					tasks, isEnd, err := collection.Next()
 					if err != nil {
@@ -82,9 +86,10 @@ func (s *preloadingTaskService) Preload() {
 						s.chPreloadedTask <- task
 					}
 				}
-			}()
+				wg.Done()
+			}(&wg)
 		}
-		time.Sleep(time.Hour)
-
+		wg.Wait()
+		time.Sleep(time.Duration((5 - time.Since(now).Seconds()) * float64(time.Second)))
 	}
 }

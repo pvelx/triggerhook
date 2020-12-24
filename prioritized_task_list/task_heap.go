@@ -30,10 +30,10 @@ type heapPrioritizedTaskList struct {
 	index map[string]int
 }
 
-func (tqh *heapPrioritizedTaskList) Add(task *domain.Task) {
+func (tqh *heapPrioritizedTaskList) Add(task domain.Task) {
 	tqh.index[task.Id] = tqh.pq.Len()
 	heap.Push(&tqh.pq, &item{
-		task:     *task,
+		task:     task,
 		priority: task.ExecTime,
 	})
 }

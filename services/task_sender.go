@@ -1,16 +1,18 @@
 package services
 
 import (
+	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"time"
 )
 
 type Options struct {
-	batchMaxItems       int
-	batchTimeout        time.Duration
-	chTasksToConfirmLen int
-	chBatchesLen        int
+	batchMaxItems            int
+	batchTimeout             time.Duration
+	chTasksToConfirmLen      int
+	chBatchesLen             int
+	confirmationWorkersCount int
 }
 
 func NewTaskSender(
@@ -20,16 +22,17 @@ func NewTaskSender(
 ) contracts.TaskSenderInterface {
 	if options == nil {
 		options = &Options{
-			batchMaxItems:       1000,
-			batchTimeout:        50 * time.Millisecond,
-			chTasksToConfirmLen: 10000000,
-			chBatchesLen:        10000,
+			batchMaxItems:            1000,
+			batchTimeout:             50 * time.Millisecond,
+			chTasksToConfirmLen:      10000000,
+			chBatchesLen:             10000,
+			confirmationWorkersCount: 5,
 		}
 	}
 
 	return &taskSender{
 		taskManager:        taskManager,
-		chTasksToConfirm:   make(chan *domain.Task, options.chTasksToConfirmLen),
+		chTasksToConfirm:   make(chan domain.Task, options.chTasksToConfirmLen),
 		chTasksReadyToSend: chTasksReadyToSend,
 		options:            options,
 	}
@@ -37,14 +40,14 @@ func NewTaskSender(
 
 type taskSender struct {
 	contracts.TaskSenderInterface
-	sendByExternalTransport func(task *domain.Task)
+	sendByExternalTransport func(task domain.Task)
 	chTasksReadyToSend      <-chan domain.Task
-	chTasksToConfirm        chan *domain.Task
+	chTasksToConfirm        chan domain.Task
 	taskManager             contracts.TaskManagerInterface
 	options                 *Options
 }
 
-func (s *taskSender) SetTransport(sendByExternalTransport func(task *domain.Task)) {
+func (s *taskSender) SetTransport(sendByExternalTransport func(task domain.Task)) {
 	s.sendByExternalTransport = sendByExternalTransport
 }
 
@@ -57,34 +60,34 @@ func (s *taskSender) Send() {
 	go s.confirmBatch(batchTasksCh)
 
 	for task := range s.chTasksReadyToSend {
-		s.sendByExternalTransport(&task)
-		s.chTasksToConfirm <- &task
+		s.sendByExternalTransport(task)
+		s.chTasksToConfirm <- task
 	}
 }
 
-func (s *taskSender) confirmBatch(batchTasksCh chan []*domain.Task) {
-	for i := 0; i < 5; i++ {
+func (s *taskSender) confirmBatch(batchTasksCh chan []domain.Task) {
+	for i := 0; i < s.options.confirmationWorkersCount; i++ {
 		go func() {
 			for batch := range batchTasksCh {
 				if err := s.taskManager.ConfirmExecution(batch); err != nil {
 					panic(err)
 				}
+				fmt.Println(fmt.Sprintf("DEBUG TaskSender confirmBatch: confirmed %d task", len(batch)))
 			}
 		}()
 	}
 }
 
-func (s *taskSender) generateBatch(tasks <-chan *domain.Task, maxItems int, maxTimeout time.Duration) chan []*domain.Task {
-	batches := make(chan []*domain.Task, s.options.chBatchesLen)
+func (s *taskSender) generateBatch(tasks <-chan domain.Task, maxItems int, maxTimeout time.Duration) chan []domain.Task {
+	batches := make(chan []domain.Task, s.options.chBatchesLen)
 
 	go func() {
 		for {
-			var batch []*domain.Task
+			var batch []domain.Task
 			expire := time.After(maxTimeout)
 			for {
 				select {
 				case value := <-tasks:
-
 					batch = append(batch, value)
 					if len(batch) == maxItems {
 						goto done

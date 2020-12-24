@@ -8,7 +8,9 @@ import (
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"log"
+	"math/rand"
 	"testing"
+	"time"
 )
 
 var (
@@ -97,11 +99,31 @@ func TestOne(t *testing.T) {
 	triggerHook.SetErrorHandler(func(eventError contracts.EventError) {
 		fmt.Println("error:", eventError)
 	})
+	rand.Seed(time.Now().UnixNano())
+
+	f := 0
+	for r := 0; r < 10; r++ {
+		go func() {
+			for j := 0; j < 1000000; j++ {
+				task := domain.Task{ExecTime: time.Now().Add(time.Duration(rand.Intn(300)) * time.Second).Unix()}
+				err := triggerHook.Create(task)
+				if err != nil {
+					log.Fatal(err)
+				}
+				f++
+				if f == 1e+2 {
+					f = 0
+					//fmt.Println("created", task.Id)
+				}
+			}
+		}()
+	}
+	//time.Sleep(time.Hour)
 
 	i := 0
-	triggerHook.SetTransport(func(task *domain.Task) {
+	triggerHook.SetTransport(func(task domain.Task) {
 		i++
-		if i == 1e+3 {
+		if i == 1e+4 {
 			i = 0
 			fmt.Println("send:", task)
 		}

@@ -20,16 +20,20 @@ type task struct {
 	TakenByInstance string
 }
 
-func NewRepository(client *sql.DB, appInstanceId string) contracts.RepositoryInterface {
-	return &mysqlRepo{client, appInstanceId}
+func NewRepository(
+	client *sql.DB, appInstanceId string,
+	eventErrorHandler contracts.EventErrorHandlerInterface,
+) contracts.RepositoryInterface {
+	return &mysqlRepo{client, appInstanceId, eventErrorHandler}
 }
 
 type mysqlRepo struct {
-	client        *sql.DB
-	appInstanceId string
+	client            *sql.DB
+	appInstanceId     string
+	eventErrorHandler contracts.EventErrorHandlerInterface
 }
 
-func (r *mysqlRepo) Create(task *domain.Task, isTaken bool) error {
+func (r *mysqlRepo) Create(task domain.Task, isTaken bool) error {
 	ctx := context.Background()
 	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelReadCommitted,
@@ -114,82 +118,99 @@ func (r *mysqlRepo) Create(task *domain.Task, isTaken bool) error {
 	)
 	if createTaskErr != nil {
 		if errRollback := tx.Rollback(); errRollback != nil {
-			log.Fatal(errRollback)
+			r.eventErrorHandler.NewEventError(contracts.LevelError, errRollback)
 		}
 
 		return errors.Wrap(createTaskErr, "creating task is fail")
 	}
 
 	if errCommit := tx.Commit(); errCommit != nil {
-		log.Fatal(errCommit)
+		r.eventErrorHandler.NewEventError(contracts.LevelError, errCommit)
 	}
 
 	return nil
 }
 
-func (r *mysqlRepo) Delete(tasks []*domain.Task) error {
+func (r *mysqlRepo) Delete(tasks []domain.Task) error {
+	fmt.Println(fmt.Sprintf("DEBUG Repository Delete: start deleting %d tasks", len(tasks)))
+
 	if len(tasks) == 0 {
 		return nil
 	}
 
 	ctx := context.Background()
-	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
-		Isolation: sql.LevelRepeatableRead,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
+	//tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
+	//	Isolation: sql.LevelReadUncommitted,
+	//})
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
 	var deleteTasksArg []interface{}
 	for _, task := range tasks {
 		deleteTasksArg = append(deleteTasksArg, task.Id)
 	}
 
-	deleteTasksQuery := strings.Replace(
-		"DELETE FROM task WHERE uuid IN (?)",
-		"?",
-		"?"+strings.Repeat(",?", len(tasks)-1),
-		1,
-	)
+	params := "?" + strings.Repeat(",?", len(tasks)-1)
 
-	_, errDeleteTask := tx.ExecContext(ctx, deleteTasksQuery, deleteTasksArg...)
+	findCollectionsQuery := `SELECT c.id
+		FROM collection c WHERE c.exec_time < unix_timestamp()-5
+		AND NOT EXISTS(
+			SELECT t.uuid FROM task t WHERE t.collection_id = c.id
+		)`
+
+	resultCollectionsId, errExec := r.client.QueryContext(ctx, findCollectionsQuery)
+	if errExec != nil {
+		//tx.Rollback()
+		return errors.Wrap(errExec, "getting tasks was fail")
+	}
+
+	var collectionsIds []interface{}
+	for resultCollectionsId.Next() {
+		var collectionId int64
+		scanCollectionErr := resultCollectionsId.Scan(&collectionId)
+		if scanCollectionErr != nil {
+			//if errRollback := tx.Rollback(); errRollback != nil {
+			//	log.Fatal(errRollback)
+			//}
+
+			return errors.Wrap(scanCollectionErr, "scan collection error")
+		}
+		collectionsIds = append(collectionsIds, collectionId)
+	}
+	resultCollectionsId.Close()
+	fmt.Println(fmt.Sprintf("DEBUG Repository Delete: found %d collections to delete", len(collectionsIds)))
+
+	deleteTaskResult, errDeleteTask := r.client.ExecContext(ctx, "DELETE FROM task WHERE uuid IN ("+params+")", deleteTasksArg...)
 	if errDeleteTask != nil {
-		tx.Rollback()
+		//tx.Rollback()
 		return errors.Wrap(errDeleteTask, "deleting task was fail")
 	}
 
-	if err = tx.Commit(); err != nil {
-		log.Fatal(err)
+	deletedRowsCount, errRowsAffected := deleteTaskResult.RowsAffected()
+	if errRowsAffected != nil {
+		return errors.Wrap(errRowsAffected, "deleting task was fail")
+	}
+	fmt.Println(fmt.Sprintf("DEBUG Repository Delete: deleted %d tasks", deletedRowsCount))
+
+	if len(collectionsIds) > 0 {
+		params2 := "?" + strings.Repeat(",?", len(collectionsIds)-1)
+		clearCollectionQuery := `DELETE FROM collection c WHERE id IN(` + params2 + `)`
+
+		clearResult, errClear := r.client.ExecContext(ctx, clearCollectionQuery, collectionsIds...)
+		if errClear != nil {
+			return errors.Wrap(errClear, "clearing collections was fail")
+		}
+		affected, errClear := clearResult.RowsAffected()
+		if errClear != nil {
+			return errors.Wrap(errClear, "clearing collections was fail")
+		}
+		fmt.Println(fmt.Sprintf("DEBUG Repository Delete: cleaned %d empty collections", affected))
 	}
 
-	if err = r.ClearEmptyCollection(); err != nil {
-		log.Fatal(err)
-	}
-
-	return nil
-}
-
-func (r *mysqlRepo) ClearEmptyCollection() error {
-	ctx := context.Background()
-	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
-		Isolation: sql.LevelRepeatableRead,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	clearCollectionQuery := `DELETE FROM collection c
-		WHERE exec_time < unix_timestamp() - 5
-		AND NOT EXISTS(SELECT t.uuid FROM task t WHERE t.collection_id = c.id)`
-
-	_, errClear := tx.ExecContext(ctx, clearCollectionQuery)
-	if errClear != nil {
-		return errors.Wrap(errClear, "clearing collections was fail")
-	}
-
-	if err = tx.Commit(); err != nil {
-		log.Fatal(err)
-	}
+	//if err = tx.Commit(); err != nil {
+	//	log.Fatal(err)
+	//}
 
 	return nil
 }
@@ -222,6 +243,9 @@ func (r *mysqlRepo) getTasksByCollection(collectionId int64) (domain.Tasks, erro
 		}
 		results = append(results, task)
 	}
+	resultTasks.Close()
+
+	fmt.Println(fmt.Sprintf("DEBUG Repository getTasksByCollection: get %d tasks", len(results)))
 
 	if err = tx.Commit(); err != nil {
 		log.Fatal(err)
@@ -269,6 +293,8 @@ func (r *mysqlRepo) FindBySecToExecTime(secToNow int64) (contracts.CollectionsIn
 		tx.Rollback()
 		log.Fatal(err)
 	}
+	resultTasks.Close()
+	fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: get %d collections", len(collectionIds)))
 
 	if len(collectionIds) == 0 {
 		if err = tx.Commit(); err != nil {
@@ -282,11 +308,17 @@ func (r *mysqlRepo) FindBySecToExecTime(secToNow int64) (contracts.CollectionsIn
 		strings.Repeat(",?", len(collectionIds)-1),
 	)
 
-	_, errUpdate := tx.ExecContext(ctx, newQueryLockTasks, args...)
+	updateResult, errUpdate := tx.ExecContext(ctx, newQueryLockTasks, args...)
 	if errUpdate != nil {
 		tx.Rollback()
 		return nil, errors.Wrap(errUpdate, "database error")
 	}
+	rowsAffected, errGetRowsAffected := updateResult.RowsAffected()
+	if errGetRowsAffected != nil {
+		return nil, errors.Wrap(errUpdate, "database error")
+	}
+
+	fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: lock %d collections", rowsAffected))
 
 	if err = tx.Commit(); err != nil {
 		log.Fatal(err)
