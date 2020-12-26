@@ -2,17 +2,17 @@ package triggerHook
 
 import (
 	"database/sql"
-	"github.com/google/uuid"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"github.com/pvelx/triggerHook/repository"
 	"github.com/pvelx/triggerHook/services"
+	uuid "github.com/satori/go.uuid"
 )
 
 var appInstanceId string
 
 func init() {
-	appInstanceId = uuid.New().String()
+	appInstanceId = uuid.NewV4().String()
 }
 
 func Default(client *sql.DB) contracts.TasksDeferredInterface {

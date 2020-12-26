@@ -14,12 +14,6 @@ import (
 	"time"
 )
 
-type task struct {
-	Id              int64
-	ExecTime        int64
-	TakenByInstance string
-}
-
 func NewRepository(
 	client *sql.DB, appInstanceId string,
 	eventErrorHandler contracts.EventErrorHandlerInterface,
@@ -111,9 +105,9 @@ func (r *mysqlRepo) Create(task domain.Task, isTaken bool) error {
 	}
 
 	_, createTaskErr := tx.ExecContext(
-		ctx, "INSERT INTO task (uuid, exec_time, collection_id) VALUE (?, ?, ?)",
+		ctx,
+		"INSERT INTO task (uuid, collection_id) VALUE (?, ?)",
 		task.Id,
-		task.ExecTime,
 		collectionId,
 	)
 	if createTaskErr != nil {
@@ -224,10 +218,10 @@ func (r *mysqlRepo) getTasksByCollection(collectionId int64) (domain.Tasks, erro
 		log.Fatal(err)
 	}
 
-	const queryFindBySecToExecTime = `SELECT uuid, exec_time
-		FROM task
-		WHERE collection_id = ?
-		ORDER BY exec_time`
+	const queryFindBySecToExecTime = `SELECT t.uuid, c.exec_time
+		FROM task t
+		INNER JOIN collection c on t.collection_id = c.id
+		WHERE t.collection_id = ?`
 
 	resultTasks, errExec := tx.QueryContext(ctx, queryFindBySecToExecTime, collectionId)
 	if errExec != nil {
@@ -357,7 +351,6 @@ func (r *mysqlRepo) Up() error {
 	query2 := `create table if not exists task
 		(
 			uuid varchar(36) not null primary key,
-			exec_time int default 0 not null,
 			collection_id bigint not null,
 			constraint task_collection_id_fk foreign key (collection_id) references collection (id)
 		)`

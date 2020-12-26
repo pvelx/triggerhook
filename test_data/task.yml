@@ -1,7 +1,0 @@
-{{range $task := $.tasks}}
-- id: {{$task.Id}}
-  exec_time: {{$task.ExecTime}}
-  {{if $task.TakenByInstance }}
-  taken_by_instance: {{$task.TakenByInstance}}
-  {{end}}
-{{end}}
