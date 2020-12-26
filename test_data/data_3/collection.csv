@@ -1,0 +1,39 @@
+## >> Partial deleting tasks. Collection must NOT be deleted
+74,-14,""
+94,-6,""
+14,-5,""
+100,-4,""
+110,0,""
+81,5,""
+## <<
+
+
+## >> Complete deleting tasks. Collection must be deleted
+107,-10,""
+25,-6,""
+## <<
+
+
+## >> Complete deleting tasks. Collection must NOT be deleted
+37,-5,""
+48,-4,""
+42,0,""
+63,5,""
+## <<
+
+
+## >> Zero tasks. Collection must be deleted
+67,-10,""
+129,-6,""
+## <<
+
+
+## >> Zero tasks. Collection must NOT be deleted
+128,-5,""
+122,-4,""
+123,-3,""
+124,0,""
+125,2,""
+126,5,""
+127,10,""
+## <<

@@ -150,10 +150,10 @@ func (r *mysqlRepo) Delete(tasks []domain.Task) error {
 	findCollectionsQuery := `SELECT c.id
 		FROM collection c WHERE c.exec_time < unix_timestamp()-5
 		AND NOT EXISTS(
-			SELECT t.uuid FROM task t WHERE t.collection_id = c.id
+			SELECT t.uuid FROM task t WHERE t.collection_id = c.id AND t.uuid NOT IN(` + params + `)
 		)`
 
-	resultCollectionsId, errExec := r.client.QueryContext(ctx, findCollectionsQuery)
+	resultCollectionsId, errExec := r.client.QueryContext(ctx, findCollectionsQuery, deleteTasksArg...)
 	if errExec != nil {
 		//tx.Rollback()
 		return errors.Wrap(errExec, "getting tasks was fail")
