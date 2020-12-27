@@ -2,6 +2,7 @@ package contracts
 
 import (
 	"github.com/pvelx/triggerHook/domain"
+	"time"
 )
 
 type PrioritizedTaskListInterface interface {
@@ -27,7 +28,7 @@ type TaskSenderInterface interface {
 type TaskManagerInterface interface {
 	Create(task domain.Task, isTaken bool) error
 	Delete(task domain.Task) error
-	GetTasksToComplete(secToExecTime int64) (CollectionsInterface, error)
+	GetTasksToComplete(preloadingTimeRange time.Duration) (CollectionsInterface, error)
 	ConfirmExecution(task []domain.Task) error
 }
 
@@ -37,8 +38,8 @@ type CollectionsInterface interface {
 
 type RepositoryInterface interface {
 	Create(task domain.Task, isTaken bool) error
-	Delete(task []domain.Task) error
-	FindBySecToExecTime(secToNow int64) (CollectionsInterface, error)
+	Delete(tasks []domain.Task) error
+	FindBySecToExecTime(preloadingTimeRange time.Duration) (CollectionsInterface, error)
 	Up() error
 }
 

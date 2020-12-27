@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/repository"
 	"sync"
 	"time"
 )
@@ -12,7 +13,7 @@ func NewPreloadingTaskService(tm contracts.TaskManagerInterface) contracts.Prelo
 	return &preloadingTaskService{
 		taskManager:           tm,
 		chPreloadedTask:       make(chan domain.Task, 10000000),
-		timePreload:           5,
+		timePreload:           5 * time.Second,
 		taskNumberInOneSearch: 1000,
 	}
 }
@@ -20,7 +21,7 @@ func NewPreloadingTaskService(tm contracts.TaskManagerInterface) contracts.Prelo
 type preloadingTaskService struct {
 	taskManager           contracts.TaskManagerInterface
 	chPreloadedTask       chan domain.Task
-	timePreload           int64
+	timePreload           time.Duration
 	taskNumberInOneSearch int
 }
 
@@ -29,7 +30,7 @@ func (s *preloadingTaskService) GetPreloadedChan() <-chan domain.Task {
 }
 
 func (s *preloadingTaskService) AddNewTask(task domain.Task) error {
-	relativeTimeToExec := task.ExecTime - time.Now().Unix()
+	relativeTimeToExec := time.Duration(task.ExecTime-time.Now().Unix()) * time.Second
 	isTaken := s.timePreload > relativeTimeToExec
 
 	if err := s.taskManager.Create(task, isTaken); err != nil {
@@ -47,12 +48,15 @@ func (s *preloadingTaskService) Preload() {
 	countFails := 0
 
 	for {
-		now := time.Now()
 		result, err := s.taskManager.GetTasksToComplete(s.timePreload)
-		if err != nil {
+		switch {
+		case err == repository.NoTasksFound:
+			fmt.Printf("DEBUG: I am sleep %s because does not get any tasks", s.timePreload)
+			time.Sleep(s.timePreload)
+			continue
+		case err != nil:
 			countFails++
-			time.Sleep(time.Duration(s.timePreload) * 300 * time.Millisecond)
-
+			time.Sleep(300 * time.Millisecond)
 			if countFails == 10 {
 				panic("Cannot get count of task for doing")
 			}
@@ -62,10 +66,10 @@ func (s *preloadingTaskService) Preload() {
 
 		var wg sync.WaitGroup
 		workersCount := 10
+		wg.Add(workersCount)
 		for worker := 0; worker < workersCount; worker++ {
 			//workerNum := worker
-			wg.Add(1)
-			go func(wg *sync.WaitGroup) {
+			go func() {
 				for {
 					tasks, isEnd, err := result.Next()
 					if err != nil {
@@ -87,9 +91,8 @@ func (s *preloadingTaskService) Preload() {
 					}
 				}
 				wg.Done()
-			}(&wg)
+			}()
 		}
 		wg.Wait()
-		time.Sleep(time.Duration((5 - time.Since(now).Seconds()) * float64(time.Second)))
 	}
 }

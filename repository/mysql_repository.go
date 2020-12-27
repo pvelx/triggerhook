@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+var NoTasksFound = errors.New("no tasks found")
+
 type Options struct {
 	maxCountTasksInCollection int
 }
@@ -252,8 +254,8 @@ func (r *mysqlRepository) getTasksByCollection(collectionId int64) (domain.Tasks
 	return results, nil
 }
 
-func (r *mysqlRepository) FindBySecToExecTime(secToNow int64) (contracts.CollectionsInterface, error) {
-	toNextExecTime := time.Now().Add(time.Duration(secToNow) * time.Second).Unix()
+func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
+	toNextExecTime := time.Now().Add(preloadingTimeRange * time.Second).Unix()
 	ctx := context.Background()
 	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
@@ -298,7 +300,7 @@ func (r *mysqlRepository) FindBySecToExecTime(secToNow int64) (contracts.Collect
 		if err = tx.Commit(); err != nil {
 			log.Fatal(err)
 		}
-		return nil, errors.New("empty")
+		return nil, NoTasksFound
 	}
 
 	newQueryLockTasks := fmt.Sprintf(

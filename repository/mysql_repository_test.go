@@ -127,7 +127,7 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	startWorkers := make(chan bool)
 	foundTasks := make(chan domain.Task, expectedTaskCount*2)
 
-	result, err := repository.FindBySecToExecTime(5)
+	result, err := repository.FindBySecToExecTime(5 * time.Second)
 	if err != nil {
 		log.Fatal(err, "Error while get tasks")
 	}
@@ -183,16 +183,137 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	assert.Equal(t, expectedTaskCount, foundedCountOfTasks, "Count of tasks is not equal")
 }
 
+func TestParallel(t *testing.T) {
+	clear()
+
+	taskCount := 0
+	preloadingTimeRange := 5 * time.Second
+	maxCountTasksInCollection := 1000
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection})
+
+	now := time.Now().Unix()
+	input := []struct {
+		tasksCount       int
+		isTaken          bool
+		relativeExecTime int64
+	}{
+		{1100, false, -5},
+		{1500, false, 0},
+		{1800, false, 1},
+		{2200, false, 2},
+		{1400, false, -5},
+		{2500, false, 0},
+		{1200, false, 1},
+		{300, false, 2},
+	}
+
+	creatingWorkerNumber := 10
+
+	for _, item := range input {
+		taskCount = taskCount + item.tasksCount*creatingWorkerNumber
+	}
+
+	fmt.Println("taskCount", taskCount)
+	for w := 0; w < creatingWorkerNumber; w++ {
+		go func() {
+			for _, item := range input {
+				for i := 0; i < item.tasksCount; i++ {
+					errCreate := repository.Create(getTaskInstance(now+item.relativeExecTime), item.isTaken)
+					if errCreate != nil {
+						log.Fatal(errCreate, "Error while create")
+					}
+				}
+			}
+		}()
+	}
+
+	tasks := make(chan domain.Task, 1000000)
+	go func() {
+		for {
+			collections, err := repository.FindBySecToExecTime(preloadingTimeRange)
+			if err == NoTasksFound {
+				time.Sleep(preloadingTimeRange)
+				continue
+			}
+			if err != nil {
+				log.Fatal(err, "Error while get tasks")
+			}
+
+			gettingWorkerNumber := 3
+			for w := 0; w < gettingWorkerNumber; w++ {
+				for {
+					collectionTasks, isEnd, errNext := collections.Next()
+					if errNext != nil {
+						log.Fatal(errNext, "Getting next part is fail")
+					}
+					if isEnd {
+						break
+					}
+					for _, task := range collectionTasks {
+						tasks <- task
+					}
+				}
+			}
+
+			time.Sleep(preloadingTimeRange)
+		}
+	}()
+
+	countDeletedTasks := 0
+	mu := sync.Mutex{}
+	deletingWorkerNumber := 3
+	wait := make(chan bool)
+	for w := 0; w < deletingWorkerNumber; w++ {
+		go func() {
+			maxItems := 1000
+			maxTimeout := time.Second
+			for {
+				var batch []domain.Task
+				expire := time.After(maxTimeout)
+				for {
+					select {
+					case value := <-tasks:
+						batch = append(batch, value)
+						if len(batch) == maxItems {
+							goto done
+						}
+
+					case <-expire:
+						goto done
+					}
+				}
+
+			done:
+				if len(batch) > 0 {
+					errDelete := repository.Delete(batch)
+					if errDelete != nil {
+						log.Fatal(errDelete, "Error while delete")
+					}
+					mu.Lock()
+					countDeletedTasks = countDeletedTasks + len(batch)
+					mu.Unlock()
+
+					fmt.Println("closing", countDeletedTasks, taskCount)
+					if countDeletedTasks == taskCount {
+						close(wait)
+					}
+				}
+			}
+		}()
+	}
+
+	<-wait
+}
+
 func TestFindBySecToExecTime(t *testing.T) {
 	clear()
 	loadFixtures("data_2")
 
 	repository := NewRepository(db, appInstanceId, ErrorHandler{}, nil)
 
-	expectedCountTaskOnIteration := []int{
-		33, 981, 894, 128, 212, 174, 90, 148, 167, 108, 26, 966, 967, 0,
-		835, 140, 538, 127, 209, 356, 605, 354, 591, 0, 0, 0, 0, 0,
-	}
+	expectedCountTaskOnIteration := []int{33, 981, 894, 128, 212, 174, 90, 148, 167, 108, 26, 966, 967, 0, 835, 140,
+		538, 127, 209, 356, 605, 354, 591, 0, 0, 0, 0, 0}
+
 	expectedCollectionCount := len(expectedCountTaskOnIteration)
 
 	var countAllTask int
@@ -200,19 +321,16 @@ func TestFindBySecToExecTime(t *testing.T) {
 		countAllTask = countAllTask + count
 	}
 
-	collections, err := repository.FindBySecToExecTime(5)
+	collections, err := repository.FindBySecToExecTime(5 * time.Second)
 	if err != nil {
 		log.Fatal(err, "Error while get tasks")
 	}
 
 	allTasks := make(map[string]domain.Task)
 	actualCollectionCount := 0
-	isEnd := false
-	var tasks []domain.Task
-	var errNext error
 
-	for !isEnd {
-		tasks, isEnd, errNext = collections.Next()
+	for {
+		tasks, isEnd, errNext := collections.Next()
 		if errNext != nil {
 			log.Fatal(errNext, "Getting next part is fail")
 		}

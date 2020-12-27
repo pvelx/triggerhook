@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
+	"time"
 )
 
 func NewTaskManager(repo contracts.RepositoryInterface) contracts.TaskManagerInterface {
@@ -30,8 +31,8 @@ func (s *taskManager) Delete(task domain.Task) error {
 	return nil
 }
 
-func (s *taskManager) GetTasksToComplete(secToExecTime int64) (contracts.CollectionsInterface, error) {
-	tasksToExec, err := s.repo.FindBySecToExecTime(secToExecTime)
+func (s *taskManager) GetTasksToComplete(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
+	tasksToExec, err := s.repo.FindBySecToExecTime(preloadingTimeRange)
 	if err != nil {
 		return nil, err
 	}
