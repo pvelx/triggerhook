@@ -48,7 +48,7 @@ func (s *preloadingTaskService) Preload() {
 
 	for {
 		now := time.Now()
-		collection, err := s.taskManager.GetTasksToComplete(s.timePreload)
+		result, err := s.taskManager.GetTasksToComplete(s.timePreload)
 		if err != nil {
 			countFails++
 			time.Sleep(time.Duration(s.timePreload) * 300 * time.Millisecond)
@@ -67,7 +67,7 @@ func (s *preloadingTaskService) Preload() {
 			wg.Add(1)
 			go func(wg *sync.WaitGroup) {
 				for {
-					tasks, isEnd, err := collection.Next()
+					tasks, isEnd, err := result.Next()
 					if err != nil {
 						panic("Cannot get tasks for doing")
 						return

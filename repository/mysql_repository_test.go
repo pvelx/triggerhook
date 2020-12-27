@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -109,92 +110,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func loadFixtures(testDir string) {
-	/*
-		collection fixture
-	*/
-	file, err := os.Open(fmt.Sprintf("../test_data/%s/collection.csv", testDir))
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	reader.FieldsPerRecord = 3
-	reader.Comment = '#'
-
-	insertCollection := "INSERT INTO collection (id, exec_time, taken_by_instance) VALUES "
-	var insertCollectionArgs []interface{}
-	now := time.Now().Unix()
-
-	for {
-		record, e := reader.Read()
-		if e != nil {
-			fmt.Println(e)
-			break
-		}
-		relativeExecTime, _ := strconv.ParseInt(record[1], 10, 64)
-
-		if record[2] == "current" {
-			record[2] = appInstanceId
-		}
-
-		insertCollection = insertCollection + "(?, ?, ?),"
-		insertCollectionArgs = append(insertCollectionArgs, record[0], relativeExecTime+now, record[2])
-	}
-	insertCollection = insertCollection[:len(insertCollection)-len(",")]
-
-	_, err = db.Exec(insertCollection, insertCollectionArgs...)
-	if err != nil {
-		panic(err)
-	}
-
-	/*
-		task fixture
-	*/
-	taskFile, err := os.Open(fmt.Sprintf("../test_data/%s/task.csv", testDir))
-	if err != nil {
-		panic(err)
-	}
-	defer taskFile.Close()
-
-	readerTaskFile := csv.NewReader(taskFile)
-	readerTaskFile.FieldsPerRecord = 2
-
-	insertTask := "INSERT INTO task (uuid, collection_id) VALUES "
-	var values string
-	var insertTaskArgs []interface{}
-
-	isEnd := false
-	for {
-		recordTask, e := readerTaskFile.Read()
-		if e == io.EOF {
-			isEnd = true
-		}
-
-		if !isEnd {
-			values = values + "(?, ?),"
-			insertTaskArgs = append(insertTaskArgs, recordTask[0], recordTask[1])
-		}
-
-		if len(insertTaskArgs) > 1000 || isEnd {
-			values = values[:len(values)-len(",")]
-
-			_, err = db.Exec(insertTask+values, insertTaskArgs...)
-			if err != nil {
-				panic(err)
-			}
-
-			values = ""
-			insertTaskArgs = nil
-		}
-
-		if isEnd {
-			break
-		}
-	}
-}
-
 func TestFindBySecToExecTime(t *testing.T) {
 	clear()
 	loadFixtures("data_2")
@@ -263,83 +178,77 @@ func TestFindBySecToExecTime(t *testing.T) {
 	)
 }
 
-func find(a []int, x int) ([]int, bool) {
-	for i, n := range a {
-		if x == n {
-			return append(a[:i], a[i+1:]...), true
-		}
-	}
-	return a, false
-}
-
 // Testing race condition in case parallel access to tasks
-//func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
-//	clear()
-//
-//	expectedTaskCount := 1000
-//	workersCount := 20
-//	countRequestForWorker := 3
-//
-//	fixtureTasks := NewFixtureTaskBuilder(appInstanceId).
-//		AddTasksNotTaken(-4, 500).
-//		AddTasksTakenByBrokenInstance(-5, 500).
-//		GetTasks()
-//
-//	loadFixtures(fixtureTasks)
-//
-//	workersDone := sync.WaitGroup{}
-//	workersDone.Add(workersCount)
-//
-//	startWorkers := make(chan struct{})
-//	foundTasks := make(chan domain.Task, expectedTaskCount*5)
-//
-//	for worker := 0; worker < workersCount; worker++ {
-//		workerNum := worker
-//		go func() {
-//			t.Log(fmt.Sprintf("Start worker:%d", workerNum))
-//			defer workersDone.Done()
-//			<-startWorkers
-//
-//			for i := 0; i < countRequestForWorker; i++ {
-//				tasks, err := repository.FindBySecToExecTime(0)
-//				if err != nil {
-//					log.Fatal(err, "Error while get tasks")
-//				}
-//				t.Log(fmt.Sprintf(
-//					"WorkerNum:%d get %d count of tasks. Connections - InUse:%d Idle:%d",
-//					workerNum,
-//					len(tasks),
-//					db.Stats().InUse,
-//					db.Stats().Idle,
-//				))
-//
-//				for _, task := range tasks {
-//					foundTasks <- task
-//				}
-//			}
-//		}()
-//	}
-//
-//	close(startWorkers)
-//
-//	workersDone.Wait()
-//	close(foundTasks)
-//
-//	var taskIdsFound = make([]domain.Task, 0, expectedTaskCount*5)
-//	for taskFound := range foundTasks {
-//		taskIdsFound = append(taskIdsFound, taskFound)
-//	}
-//	sortTaskById(taskIdsFound)
-//
-//	for i := 1; i < expectedTaskCount; i++ {
-//		assert.True(t,
-//			fixtureTasks[i].Id == taskIdsFound[i].Id &&
-//				fixtureTasks[i].ExecTime == taskIdsFound[i].ExecTime,
-//			"Tasks is not equal",
-//		)
-//	}
-//	assert.Len(t, fixtureTasks, expectedTaskCount, "Count of tasks is not equal")
-//}
+func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
+	clear()
+	loadFixtures("data_1")
+
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, nil)
+
+	expectedTaskCount := 35060
+	workersCount := 10
+
+	workersDone := sync.WaitGroup{}
+	workersDone.Add(workersCount)
+
+	startWorkers := make(chan bool)
+	foundTasks := make(chan domain.Task, expectedTaskCount*2)
+
+	result, err := repository.FindBySecToExecTime(5)
+	if err != nil {
+		log.Fatal(err, "Error while get tasks")
+	}
+	allTasks := make(map[string]domain.Task)
+
+	foundedCountOfTasks := 0
+	for worker := 0; worker < workersCount; worker++ {
+		workerNum := worker
+		go func() {
+			defer workersDone.Done()
+			<-startWorkers
+
+			for {
+				tasks, isEnd, err := result.Next()
+				if err != nil {
+					panic("Cannot get tasks for doing")
+					return
+				}
+				if isEnd {
+					break
+				}
+
+				t.Log(fmt.Sprintf(
+					"WorkerNum:%d get %d count of tasks. Connections - InUse:%d Idle:%d",
+					workerNum,
+					len(tasks),
+					db.Stats().InUse,
+					db.Stats().Idle,
+				))
+
+				for _, task := range tasks {
+					foundTasks <- task
+				}
+			}
+		}()
+	}
+
+	close(startWorkers)
+
+	workersDone.Wait()
+	close(foundTasks)
+
+	var tasks = make([]domain.Task, 0, expectedTaskCount*2)
+	for task := range foundTasks {
+		tasks = append(tasks, task)
+		if _, exist := allTasks[task.Id]; exist {
+			assert.Fail(t, fmt.Sprintf("The task already was founded in previous time"))
+		}
+		allTasks[task.Id] = task
+		foundedCountOfTasks++
+	}
+
+	assert.Equal(t, expectedTaskCount, foundedCountOfTasks, "Count of tasks is not equal")
+}
 
 func TestDeleteBunch(t *testing.T) {
 	clear()
@@ -484,6 +393,12 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+/*
+	----------------------------------------------------
+	-------------------- test tools --------------------
+	----------------------------------------------------
+*/
+
 func getCountTasksByParamsInDb(isTaken bool, execTime int64) int {
 	op := "!="
 	if isTaken {
@@ -562,4 +477,99 @@ func isCollectionExistInDb(collectionId int) bool {
 	}
 
 	return id == collectionId
+}
+
+func find(a []int, x int) ([]int, bool) {
+	for i, n := range a {
+		if x == n {
+			return append(a[:i], a[i+1:]...), true
+		}
+	}
+	return a, false
+}
+
+func loadFixtures(testDir string) {
+	/*
+		collection fixture
+	*/
+	file, err := os.Open(fmt.Sprintf("../test_data/%s/collection.csv", testDir))
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.FieldsPerRecord = 3
+	reader.Comment = '#'
+
+	insertCollection := "INSERT INTO collection (id, exec_time, taken_by_instance) VALUES "
+	var insertCollectionArgs []interface{}
+	now := time.Now().Unix()
+
+	for {
+		record, e := reader.Read()
+		if e == io.EOF {
+			break
+		}
+
+		relativeExecTime, _ := strconv.ParseInt(record[1], 10, 64)
+
+		if record[2] == "current" {
+			record[2] = appInstanceId
+		}
+
+		insertCollection = insertCollection + "(?, ?, ?),"
+		insertCollectionArgs = append(insertCollectionArgs, record[0], relativeExecTime+now, record[2])
+	}
+	insertCollection = insertCollection[:len(insertCollection)-len(",")]
+
+	_, err = db.Exec(insertCollection, insertCollectionArgs...)
+	if err != nil {
+		panic(err)
+	}
+
+	/*
+		task fixture
+	*/
+	taskFile, err := os.Open(fmt.Sprintf("../test_data/%s/task.csv", testDir))
+	if err != nil {
+		panic(err)
+	}
+	defer taskFile.Close()
+
+	readerTaskFile := csv.NewReader(taskFile)
+	readerTaskFile.FieldsPerRecord = 2
+
+	insertTask := "INSERT INTO task (uuid, collection_id) VALUES "
+	var values string
+	var insertTaskArgs []interface{}
+
+	isEnd := false
+	for {
+		recordTask, e := readerTaskFile.Read()
+		if e == io.EOF {
+			isEnd = true
+		}
+
+		if !isEnd {
+			values = values + "(?, ?),"
+			insertTaskArgs = append(insertTaskArgs, recordTask[0], recordTask[1])
+		}
+
+		if len(insertTaskArgs) > 1000 || isEnd {
+			values = values[:len(values)-len(",")]
+
+			_, err = db.Exec(insertTask+values, insertTaskArgs...)
+			if err != nil {
+				panic(err)
+			}
+
+			values = ""
+			insertTaskArgs = nil
+		}
+
+		if isEnd {
+			break
+		}
+	}
 }
