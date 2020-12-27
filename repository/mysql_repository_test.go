@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"io"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"sync"
@@ -95,7 +96,7 @@ func TestMain(m *testing.M) {
 	db.SetMaxIdleConns(idleConn)
 	db.SetMaxOpenConns(maxConn)
 
-	repository = NewRepository(db, appInstanceId, ErrorHandler{})
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, nil)
 
 	if err := repository.Up(); err != nil {
 		log.Fatalf("Up schema is fail: %s", err)
@@ -108,74 +109,6 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(code)
-}
-
-func TestFindBySecToExecTime(t *testing.T) {
-	clear()
-	loadFixtures("data_2")
-
-	repository := NewRepository(db, appInstanceId, ErrorHandler{}, nil)
-
-	expectedCountTaskOnIteration := []int{
-		33, 981, 894, 128, 212, 174, 90, 148, 167, 108, 26, 966, 967, 0,
-		835, 140, 538, 127, 209, 356, 605, 354, 591, 0, 0, 0, 0, 0,
-	}
-	expectedCollectionCount := len(expectedCountTaskOnIteration)
-
-	var countAllTask int
-	for _, count := range expectedCountTaskOnIteration {
-		countAllTask = countAllTask + count
-	}
-
-	collections, err := repository.FindBySecToExecTime(5)
-	if err != nil {
-		log.Fatal(err, "Error while get tasks")
-	}
-
-	allTasks := make(map[string]domain.Task)
-	actualCollectionCount := 0
-	isEnd := false
-	var tasks []domain.Task
-	var errNext error
-
-	for !isEnd {
-		tasks, isEnd, errNext = collections.Next()
-		if errNext != nil {
-			log.Fatal(errNext, "Getting next part is fail")
-		}
-		if isEnd {
-			break
-		}
-
-		for _, task := range tasks {
-			if _, exist := allTasks[task.Id]; exist {
-				assert.Fail(t, fmt.Sprintf("Task was founded in previous time"))
-			}
-			allTasks[task.Id] = task
-		}
-		actualCollectionCount++
-
-		var isFound bool
-
-		expectedCountTaskOnIteration, isFound = find(expectedCountTaskOnIteration, len(tasks))
-		if !isFound {
-			assert.Fail(t, fmt.Sprintf("Founded count of task in for collection is not correct"))
-		}
-	}
-
-	assert.Equal(
-		t,
-		expectedCollectionCount,
-		actualCollectionCount,
-		"Founded count of collection is not correct",
-	)
-
-	assert.Equal(
-		t,
-		countAllTask,
-		len(allTasks),
-		"Founded count of all task is not correct",
-	)
 }
 
 // Testing race condition in case parallel access to tasks
@@ -248,6 +181,150 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	}
 
 	assert.Equal(t, expectedTaskCount, foundedCountOfTasks, "Count of tasks is not equal")
+}
+
+func TestFindBySecToExecTime(t *testing.T) {
+	clear()
+	loadFixtures("data_2")
+
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, nil)
+
+	expectedCountTaskOnIteration := []int{
+		33, 981, 894, 128, 212, 174, 90, 148, 167, 108, 26, 966, 967, 0,
+		835, 140, 538, 127, 209, 356, 605, 354, 591, 0, 0, 0, 0, 0,
+	}
+	expectedCollectionCount := len(expectedCountTaskOnIteration)
+
+	var countAllTask int
+	for _, count := range expectedCountTaskOnIteration {
+		countAllTask = countAllTask + count
+	}
+
+	collections, err := repository.FindBySecToExecTime(5)
+	if err != nil {
+		log.Fatal(err, "Error while get tasks")
+	}
+
+	allTasks := make(map[string]domain.Task)
+	actualCollectionCount := 0
+	isEnd := false
+	var tasks []domain.Task
+	var errNext error
+
+	for !isEnd {
+		tasks, isEnd, errNext = collections.Next()
+		if errNext != nil {
+			log.Fatal(errNext, "Getting next part is fail")
+		}
+		if isEnd {
+			break
+		}
+
+		for _, task := range tasks {
+			if _, exist := allTasks[task.Id]; exist {
+				assert.Fail(t, fmt.Sprintf("Task was founded in previous time"))
+			}
+			allTasks[task.Id] = task
+		}
+		actualCollectionCount++
+
+		var isFound bool
+
+		expectedCountTaskOnIteration, isFound = find(expectedCountTaskOnIteration, len(tasks))
+		if !isFound {
+			assert.Fail(t, fmt.Sprintf("Founded count of task in for collection is not correct"))
+		}
+	}
+
+	assert.Equal(
+		t,
+		expectedCollectionCount,
+		actualCollectionCount,
+		"Founded count of collection is not correct",
+	)
+
+	assert.Equal(
+		t,
+		countAllTask,
+		len(allTasks),
+		"Founded count of all task is not correct",
+	)
+}
+
+func TestCreateRaceCondition(t *testing.T) {
+	clear()
+
+	maxCountTasksInCollection := 100
+	repository := NewRepository(
+		db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection})
+
+	now := time.Now().Unix()
+	input := []struct {
+		tasksCount       int
+		isTaken          bool
+		relativeExecTime int64
+	}{
+		{180, false, -5},
+		{150, false, 0},
+		{150, false, 1},
+		{220, false, 2},
+		{140, true, -5},
+		{250, true, 0},
+		{120, true, 1},
+		{80, true, 2},
+	}
+
+	workersCount := 5
+	workersDone := sync.WaitGroup{}
+	workersDone.Add(workersCount)
+	startWorkers := make(chan bool)
+	for worker := 0; worker < workersCount; worker++ {
+		workerNum := worker
+		go func() {
+			defer workersDone.Done()
+			<-startWorkers
+			for _, item := range input {
+				t.Log(fmt.Sprintf(
+					"WorkerNum:%d. Connections - InUse:%d Idle:%d",
+					workerNum,
+					db.Stats().InUse,
+					db.Stats().Idle,
+				))
+				for i := 0; i < item.tasksCount; i++ {
+					errCreate := repository.Create(getTaskInstance(now+item.relativeExecTime), item.isTaken)
+					if errCreate != nil {
+						log.Fatal(errCreate, "Error while create")
+					}
+				}
+			}
+		}()
+	}
+
+	close(startWorkers)
+	workersDone.Wait()
+
+	for i, item := range input {
+		assert.Equal(t,
+			item.tasksCount*workersCount,
+			getCountTasksByParamsInDb(item.isTaken, now+item.relativeExecTime),
+			fmt.Sprintf("Count of tasks is not correct (isTaken:%t, execTime:%d, input item: %d)",
+				item.isTaken, now+item.relativeExecTime, i),
+		)
+
+		/*
+			Due to concurrent access to DB may be created extra collection. It is not big problem.
+			It is assumed that the number of extra collections should not exceed twice the norm.
+		*/
+		maxApproximatelyCountOfCollections :=
+			int(float64(item.tasksCount*workersCount) / float64(maxCountTasksInCollection) * 2)
+
+		assert.LessOrEqual(t,
+			getCountCollectionsByParamsInDb(item.isTaken, now+item.relativeExecTime),
+			maxApproximatelyCountOfCollections,
+			fmt.Sprintf("Count of collections is not correct (isTaken:%t, execTime:%d, input item: %d)",
+				item.isTaken, now+item.relativeExecTime, i),
+		)
+	}
 }
 
 func TestDeleteBunch(t *testing.T) {
@@ -344,26 +421,22 @@ func TestDeleteBunch(t *testing.T) {
 
 func TestCreate(t *testing.T) {
 	clear()
-	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{100})
-
-	getTaskInstance := func(execTime int64) domain.Task {
-		return domain.Task{Id: uuid.NewV4().String(), ExecTime: execTime}
-	}
+	maxCountTasksInCollection := 100
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection})
 
 	input := []struct {
 		tasksCount       int
 		isTaken          bool
 		relativeExecTime int64
-		collectionCount  int
 	}{
-		{110, false, -5, 2},
-		{150, false, 0, 2},
-		{180, false, 1, 2},
-		{220, false, 2, 3},
-		{140, true, -5, 2},
-		{250, true, 0, 3},
-		{120, true, 1, 2},
-		{30, true, 2, 1},
+		{110, false, -5},
+		{150, false, 0},
+		{180, false, 1},
+		{220, false, 2},
+		{140, true, -5},
+		{250, true, 0},
+		{120, true, 1},
+		{30, true, 2},
 	}
 
 	now := time.Now().Unix()
@@ -385,7 +458,7 @@ func TestCreate(t *testing.T) {
 		)
 
 		assert.Equal(t,
-			item.collectionCount,
+			int(math.Ceil(float64(item.tasksCount)/float64(maxCountTasksInCollection))),
 			getCountCollectionsByParamsInDb(item.isTaken, now+item.relativeExecTime),
 			fmt.Sprintf("Count of collections is not correct (isTaken:%t, execTime:%d)",
 				item.isTaken, now+item.relativeExecTime),
@@ -398,6 +471,9 @@ func TestCreate(t *testing.T) {
 	-------------------- test tools --------------------
 	----------------------------------------------------
 */
+func getTaskInstance(execTime int64) domain.Task {
+	return domain.Task{Id: uuid.NewV4().String(), ExecTime: execTime}
+}
 
 func getCountTasksByParamsInDb(isTaken bool, execTime int64) int {
 	op := "!="
