@@ -14,7 +14,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -36,8 +35,6 @@ var (
 	idleConn = 25
 
 	appInstanceId = uuid.NewV4().String()
-
-	repository contracts.RepositoryInterface
 )
 
 type ErrorHandler struct {
@@ -202,6 +199,8 @@ func TestFindBySecToExecTime(t *testing.T) {
 	clear()
 	loadFixtures("data_2")
 
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, nil)
+
 	expectedCountTaskOnIteration := []int{
 		33, 981, 894, 128, 212, 174, 90, 148, 167, 108, 26, 966, 967, 0,
 		835, 140, 538, 127, 209, 356, 605, 354, 591, 0, 0, 0, 0, 0,
@@ -345,6 +344,7 @@ func find(a []int, x int) ([]int, bool) {
 func TestDeleteBunch(t *testing.T) {
 	clear()
 	loadFixtures("data_3")
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, nil)
 
 	tasksMustNotBeDeleted := []domain.Task{
 		{Id: "1657bd33-83d0-4a02-ab23-288a8ea33452"},
@@ -435,40 +435,94 @@ func TestDeleteBunch(t *testing.T) {
 
 func TestCreate(t *testing.T) {
 	clear()
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{100})
 
-	tests := []struct {
-		name    string
-		isTaken bool
+	getTaskInstance := func(execTime int64) domain.Task {
+		return domain.Task{Id: uuid.NewV4().String(), ExecTime: execTime}
+	}
+
+	input := []struct {
+		tasksCount       int
+		isTaken          bool
+		relativeExecTime int64
+		collectionCount  int
 	}{
-		{"Taken", true},
-		{"Not taken", false},
+		{110, false, -5, 2},
+		{150, false, 0, 2},
+		{180, false, 1, 2},
+		{220, false, 2, 3},
+		{140, true, -5, 2},
+		{250, true, 0, 3},
+		{120, true, 1, 2},
+		{30, true, 2, 1},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
 
-			for i := 1; i <= 100; i++ {
-				errCreate := repository.Create(domain.Task{ExecTime: time.Now().Unix()}, test.isTaken)
-				if errCreate != nil {
-					log.Fatal(errCreate, "Error while create")
-				}
-
-				// TODO check in db
+	now := time.Now().Unix()
+	for _, item := range input {
+		for i := 0; i < item.tasksCount; i++ {
+			errCreate := repository.Create(getTaskInstance(now+item.relativeExecTime), item.isTaken)
+			if errCreate != nil {
+				log.Fatal(errCreate, "Error while create")
 			}
-		})
+		}
+	}
+
+	for _, item := range input {
+		assert.Equal(t,
+			item.tasksCount,
+			getCountTasksByParamsInDb(item.isTaken, now+item.relativeExecTime),
+			fmt.Sprintf("Count of tasks is not correct (isTaken:%t, execTime:%d)",
+				item.isTaken, now+item.relativeExecTime),
+		)
+
+		assert.Equal(t,
+			item.collectionCount,
+			getCountCollectionsByParamsInDb(item.isTaken, now+item.relativeExecTime),
+			fmt.Sprintf("Count of collections is not correct (isTaken:%t, execTime:%d)",
+				item.isTaken, now+item.relativeExecTime),
+		)
 	}
 }
 
-func min(a, b int) int {
-	if a <= b {
-		return a
+func getCountTasksByParamsInDb(isTaken bool, execTime int64) int {
+	op := "!="
+	if isTaken {
+		op = "="
 	}
-	return b
+	var count int
+	query := fmt.Sprintf(`SELECT count(uuid)
+		FROM task
+		INNER JOIN collection c on task.collection_id = c.id
+		WHERE exec_time = ? AND taken_by_instance %s ?`, op)
+	err := db.QueryRow(query, execTime, appInstanceId).Scan(&count)
+	switch {
+	case err == sql.ErrNoRows:
+		return 0
+	case err != nil:
+		log.Fatalf("query error: %v\n", err)
+	}
+
+	return count
 }
 
-func sortTaskById(tasks []domain.Task) {
-	sort.Slice(tasks, func(i, j int) bool {
-		return tasks[i].Id < tasks[j].Id
-	})
+func getCountCollectionsByParamsInDb(isTaken bool, execTime int64) int {
+	op := "!="
+	if isTaken {
+		op = "="
+	}
+	var count int
+	query := fmt.Sprintf(`SELECT count(id) 
+		FROM collection
+		WHERE exec_time = ? AND taken_by_instance %s ?`, op)
+	err := db.QueryRow(query, execTime, appInstanceId).Scan(&count)
+	switch {
+	case err == sql.ErrNoRows:
+		return 0
+	case err != nil:
+		log.Fatalf("query error: %v\n", err)
+	}
+
+	return count
 }
 
 func clear() {

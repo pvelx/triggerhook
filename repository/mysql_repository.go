@@ -7,27 +7,36 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/satori/go.uuid"
 	"log"
 	"strings"
 	"sync"
 	"time"
 )
 
+type Options struct {
+	maxCountTasksInCollection int
+}
+
 func NewRepository(
 	client *sql.DB, appInstanceId string,
 	eventErrorHandler contracts.EventErrorHandlerInterface,
+	options *Options,
 ) contracts.RepositoryInterface {
-	return &mysqlRepo{client, appInstanceId, eventErrorHandler}
+	if options == nil {
+		options = &Options{maxCountTasksInCollection: 1000}
+	}
+
+	return &mysqlRepository{client, appInstanceId, eventErrorHandler, options}
 }
 
-type mysqlRepo struct {
+type mysqlRepository struct {
 	client            *sql.DB
 	appInstanceId     string
 	eventErrorHandler contracts.EventErrorHandlerInterface
+	options           *Options
 }
 
-func (r *mysqlRepo) Create(task domain.Task, isTaken bool) error {
+func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 	ctx := context.Background()
 	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelReadCommitted,
@@ -36,30 +45,33 @@ func (r *mysqlRepo) Create(task domain.Task, isTaken bool) error {
 		log.Fatal(err)
 	}
 
-	if task.Id == "" {
-		task.Id = uuid.NewV4().String()
-	}
-
 	collectionQueryOp := "!="
-	appInstanceId := ""
 	if isTaken {
 		collectionQueryOp = "="
-		appInstanceId = r.appInstanceId
 	}
 
 	findCollectionQuery := fmt.Sprintf(`SELECT c.id
 		FROM collection c
 		LEFT JOIN task t on c.id = t.collection_id
-		WHERE c.exec_time >= ?
-			AND c.exec_time < ?
+		WHERE c.exec_time = ?
 			AND c.taken_by_instance %s ?
 		GROUP BY c.id
 		HAVING count(t.uuid) < ? 
 		LIMIT 1`, collectionQueryOp)
 
 	var collectionId int64
-	findingResult, findCollectionErr := tx.QueryContext(ctx, findCollectionQuery, task.ExecTime, task.ExecTime+1, r.appInstanceId, 1000)
-	if findCollectionErr != nil {
+	findCollectionErr := tx.QueryRowContext(
+		ctx,
+		findCollectionQuery,
+		task.ExecTime,
+		r.appInstanceId,
+		r.options.maxCountTasksInCollection,
+	).Scan(&collectionId)
+
+	switch {
+	case findCollectionErr == sql.ErrNoRows:
+		break
+	case findCollectionErr != nil:
 		if errRollback := tx.Rollback(); errRollback != nil {
 			log.Fatal(errRollback)
 		}
@@ -67,19 +79,11 @@ func (r *mysqlRepo) Create(task domain.Task, isTaken bool) error {
 		return errors.Wrap(findCollectionErr, "find collection error")
 	}
 
-	if findingResult.Next() {
-		scanCollectionErr := findingResult.Scan(&collectionId)
-		if scanCollectionErr != nil {
-			if errRollback := tx.Rollback(); errRollback != nil {
-				log.Fatal(errRollback)
-			}
-
-			return errors.Wrap(findCollectionErr, "scan collection error")
-		}
-	}
-	findingResult.Close()
-
 	if collectionId == 0 {
+		var appInstanceId string
+		if isTaken {
+			appInstanceId = r.appInstanceId
+		}
 		creatingCollectionResult, createCollectionsErr := tx.ExecContext(
 			ctx,
 			"INSERT INTO collection (exec_time, taken_by_instance) VALUE (?, ?)",
@@ -125,7 +129,7 @@ func (r *mysqlRepo) Create(task domain.Task, isTaken bool) error {
 	return nil
 }
 
-func (r *mysqlRepo) Delete(tasks []domain.Task) error {
+func (r *mysqlRepository) Delete(tasks []domain.Task) error {
 	fmt.Println(fmt.Sprintf("DEBUG Repository Delete: start deleting %d tasks", len(tasks)))
 
 	if len(tasks) == 0 {
@@ -209,7 +213,7 @@ func (r *mysqlRepo) Delete(tasks []domain.Task) error {
 	return nil
 }
 
-func (r *mysqlRepo) getTasksByCollection(collectionId int64) (domain.Tasks, error) {
+func (r *mysqlRepository) getTasksByCollection(collectionId int64) (domain.Tasks, error) {
 	ctx := context.Background()
 	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
@@ -248,7 +252,7 @@ func (r *mysqlRepo) getTasksByCollection(collectionId int64) (domain.Tasks, erro
 	return results, nil
 }
 
-func (r *mysqlRepo) FindBySecToExecTime(secToNow int64) (contracts.CollectionsInterface, error) {
+func (r *mysqlRepository) FindBySecToExecTime(secToNow int64) (contracts.CollectionsInterface, error) {
 	toNextExecTime := time.Now().Add(time.Duration(secToNow) * time.Second).Unix()
 	ctx := context.Background()
 	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
@@ -325,7 +329,7 @@ func (r *mysqlRepo) FindBySecToExecTime(secToNow int64) (contracts.CollectionsIn
 	}, nil
 }
 
-func (r *mysqlRepo) Up() error {
+func (r *mysqlRepository) Up() error {
 	ctx := context.Background()
 	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
@@ -371,7 +375,7 @@ func (r *mysqlRepo) Up() error {
 type Collections struct {
 	mx          *sync.Mutex
 	collections []int64
-	r           *mysqlRepo
+	r           *mysqlRepository
 }
 
 func (c *Collections) takeCollectionId() (id int64, isEnd bool) {

@@ -18,7 +18,7 @@ func init() {
 func Default(client *sql.DB) contracts.TasksDeferredInterface {
 	eventErrorHandler := services.NewEventErrorHandler()
 
-	repo := repository.NewRepository(client, appInstanceId, eventErrorHandler)
+	repo := repository.NewRepository(client, appInstanceId, eventErrorHandler, nil)
 	if err := repo.Up(); err != nil {
 		panic(err)
 	}
