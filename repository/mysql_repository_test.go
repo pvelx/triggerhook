@@ -254,8 +254,6 @@ func TestParallel(t *testing.T) {
 					}
 				}
 			}
-
-			time.Sleep(preloadingTimeRange)
 		}
 	}()
 

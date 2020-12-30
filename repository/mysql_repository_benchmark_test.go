@@ -1,5 +1,13 @@
 package repository
 
+import (
+	"fmt"
+	"github.com/pvelx/triggerHook/domain"
+	uuid "github.com/satori/go.uuid"
+	"testing"
+	"time"
+)
+
 //func BenchmarkBunchDelete(b *testing.B) {
 //	clear()
 //	b.ReportAllocs()
@@ -85,37 +93,20 @@ package repository
 //	}
 //}
 
-//func Benchmark3(b *testing.B) {
-//	repo := setUp()
-//	b.ReportAllocs()
-//	b.ResetTimer()
-//	b.StopTimer()
-//
-//	//b.RunParallel(func(pb *testing.PB) {
-//	//	for pb.Next() {
-//	//		task := &domain.Task{ExecTime: 1}
-//	//		b.StartTimer()
-//	//		err := repo.Create(task, false)
-//	//		b.StopTimer()
-//	//		if err != nil {
-//	//			fmt.Println("err")
-//	//		}
-//	//
-//	//		//repo.ChangeStatusToCompleted(task)
-//	//
-//	//	}
-//	//})
-//
-//	for n := 0; n < b.N; n++ {
-//
-//		task := &domain.Task{ExecTime: 1}
-//		err := repo.Create(task, false)
-//		if err != nil {
-//			fmt.Println("err")
-//		}
-//		b.StartTimer()
-//		repo.ChangeStatusToCompleted(task)
-//		b.StopTimer()
-//		//fmt.Println(len(tasks))
-//	}
-//}
+func Benchmark3(b *testing.B) {
+	clear()
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{1000})
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.StartTimer()
+
+	for n := 0; n < b.N; n++ {
+
+		task := domain.Task{Id: uuid.NewV4().String(), ExecTime: time.Now().Unix()}
+		err := repository.Create(task, false)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+}

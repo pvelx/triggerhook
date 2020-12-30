@@ -47,81 +47,22 @@ func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 		log.Fatal(err)
 	}
 
-	collectionQueryOp := "!="
-	if isTaken {
-		collectionQueryOp = "="
-	}
-
-	findCollectionQuery := fmt.Sprintf(`SELECT c.id
-		FROM collection c
-		LEFT JOIN task t on c.id = t.collection_id
-		WHERE c.exec_time = ?
-			AND c.taken_by_instance %s ?
-		GROUP BY c.id
-		HAVING count(t.uuid) < ? 
-		LIMIT 1`, collectionQueryOp)
-
-	var collectionId int64
-	findCollectionErr := tx.QueryRowContext(
+	_, findCollectionErr := tx.ExecContext(
 		ctx,
-		findCollectionQuery,
-		task.ExecTime,
+		`CALL create_task(?, ?, ?, ?, ?);`,
 		r.appInstanceId,
+		task.Id,
+		task.ExecTime,
+		isTaken,
 		r.options.maxCountTasksInCollection,
-	).Scan(&collectionId)
+	)
 
-	switch {
-	case findCollectionErr == sql.ErrNoRows:
-		break
-	case findCollectionErr != nil:
+	if findCollectionErr != nil {
 		if errRollback := tx.Rollback(); errRollback != nil {
 			log.Fatal(errRollback)
 		}
 
 		return errors.Wrap(findCollectionErr, "find collection error")
-	}
-
-	if collectionId == 0 {
-		var appInstanceId string
-		if isTaken {
-			appInstanceId = r.appInstanceId
-		}
-		creatingCollectionResult, createCollectionsErr := tx.ExecContext(
-			ctx,
-			"INSERT INTO collection (exec_time, taken_by_instance) VALUE (?, ?)",
-			task.ExecTime,
-			appInstanceId,
-		)
-		if createCollectionsErr != nil {
-			if errRollback := tx.Rollback(); errRollback != nil {
-				log.Fatal(errRollback)
-			}
-
-			return errors.Wrap(createCollectionsErr, "creating collection is fail")
-		}
-
-		collectionId, createCollectionsErr = creatingCollectionResult.LastInsertId()
-		if createCollectionsErr != nil {
-			if errRollback := tx.Rollback(); errRollback != nil {
-				log.Fatal(errRollback)
-			}
-
-			return errors.Wrap(createCollectionsErr, "creating collection is fail")
-		}
-	}
-
-	_, createTaskErr := tx.ExecContext(
-		ctx,
-		"INSERT INTO task (uuid, collection_id) VALUE (?, ?)",
-		task.Id,
-		collectionId,
-	)
-	if createTaskErr != nil {
-		if errRollback := tx.Rollback(); errRollback != nil {
-			r.eventErrorHandler.NewEventError(contracts.LevelError, errRollback)
-		}
-
-		return errors.Wrap(createTaskErr, "creating task is fail")
 	}
 
 	if errCommit := tx.Commit(); errCommit != nil {
@@ -365,6 +306,56 @@ func (r *mysqlRepository) Up() error {
 	if err2 != nil {
 		tx.Rollback()
 		return err2
+	}
+
+	_, err3 := tx.ExecContext(ctx, `DROP PROCEDURE IF EXISTS create_task`)
+	if err3 != nil {
+		tx.Rollback()
+		return err3
+	}
+
+	query4 := `CREATE PROCEDURE create_task(param_app_instance VARCHAR(36), param_uuid VARCHAR(36), param_exec_time INT,
+                             is_taken BOOL, count_task_in_collection INT)
+		BEGIN
+			SET @var_collection_id = 0;
+			SET @var_exec_time = param_exec_time;
+			SET @var_app_instance = param_app_instance;
+			SET @var_count_task_in_collection = count_task_in_collection;
+		
+			IF is_taken THEN
+				SET @app_instance = param_app_instance;
+				SET @compare_operator = '=';
+			else
+				SET @app_instance = '';
+				SET @compare_operator = '!=';
+			end if;
+		
+			SET @find_collection_query = CONCAT('SELECT c.id INTO  @var_collection_id
+				FROM collection c LEFT JOIN task t on c.id = t.collection_id
+				WHERE c.exec_time = ? AND c.taken_by_instance ', @compare_operator, ' ?
+				GROUP BY c.id HAVING count(t.uuid) < ? LIMIT 1');
+		
+		
+-- 			SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+-- 			START TRANSACTION;
+		
+			PREPARE stmt FROM @find_collection_query;
+			EXECUTE stmt USING @var_exec_time, @var_app_instance, @var_count_task_in_collection;
+			DEALLOCATE PREPARE stmt;
+		
+			IF (@var_collection_id = 0) THEN
+				INSERT INTO collection (exec_time, taken_by_instance) VALUE (param_exec_time, @app_instance);
+				SET @var_collection_id = LAST_INSERT_ID();
+			END IF;
+		
+			INSERT INTO task (uuid, collection_id) VALUE (param_uuid, @var_collection_id);
+-- 			COMMIT;
+		END;`
+
+	_, err4 := tx.ExecContext(ctx, query4)
+	if err4 != nil {
+		tx.Rollback()
+		return err4
 	}
 
 	if err = tx.Commit(); err != nil {
