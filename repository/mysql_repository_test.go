@@ -5,8 +5,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	uuid "github.com/satori/go.uuid"
@@ -189,7 +187,8 @@ func TestParallel(t *testing.T) {
 	taskCount := 0
 	preloadingTimeRange := 5 * time.Second
 	maxCountTasksInCollection := 1000
-	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection})
+	var cleaningFrequency int32 = 10
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection, cleaningFrequency})
 
 	now := time.Now().Unix()
 	input := []struct {
@@ -197,17 +196,17 @@ func TestParallel(t *testing.T) {
 		isTaken          bool
 		relativeExecTime int64
 	}{
-		{1100, false, -5},
+		{5000, false, 0},
 		{1500, false, 0},
 		{1800, false, 1},
 		{2200, false, 2},
-		{1400, false, -5},
+		{1400, false, -6},
 		{2500, false, 0},
 		{1200, false, 1},
 		{300, false, 2},
 	}
 
-	creatingWorkerNumber := 10
+	creatingWorkerNumber := 2
 
 	for _, item := range input {
 		taskCount = taskCount + item.tasksCount*creatingWorkerNumber
@@ -372,7 +371,7 @@ func TestCreateRaceCondition(t *testing.T) {
 
 	maxCountTasksInCollection := 100
 	repository := NewRepository(
-		db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection})
+		db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection, 10})
 
 	now := time.Now().Unix()
 	input := []struct {
@@ -446,7 +445,10 @@ func TestCreateRaceCondition(t *testing.T) {
 func TestDeleteBunch(t *testing.T) {
 	clear()
 	loadFixtures("data_3")
-	repository := NewRepository(db, appInstanceId, ErrorHandler{}, nil)
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{
+		maxCountTasksInCollection: 1000,
+		cleaningFrequency:         1,
+	})
 
 	tasksMustNotBeDeleted := []domain.Task{
 		{Id: "1657bd33-83d0-4a02-ab23-288a8ea33452"},
@@ -538,7 +540,7 @@ func TestDeleteBunch(t *testing.T) {
 func TestCreate(t *testing.T) {
 	clear()
 	maxCountTasksInCollection := 100
-	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection})
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection, 10})
 
 	input := []struct {
 		tasksCount       int
@@ -762,6 +764,62 @@ func loadFixtures(testDir string) {
 
 		if isEnd {
 			break
+		}
+	}
+}
+
+type task struct {
+	Id           string
+	CollectionId int64
+}
+
+type collection struct {
+	Id              int64
+	TakenByInstance string
+	ExecTime        int64
+}
+
+func upFixtures(collections []collection, tasks []task) {
+	/*
+		collection fixture
+	*/
+
+	insertCollection := "INSERT INTO collection (id, exec_time, taken_by_instance) VALUES "
+	var insertCollectionArgs []interface{}
+
+	for _, collection := range collections {
+		insertCollection = insertCollection + "(?, ?, ?),"
+		insertCollectionArgs = append(insertCollectionArgs, collection.Id, collection.ExecTime, collection.TakenByInstance)
+	}
+	insertCollection = insertCollection[:len(insertCollection)-len(",")]
+
+	_, err := db.Exec(insertCollection, insertCollectionArgs...)
+	if err != nil {
+		panic(err)
+	}
+
+	/*
+		task fixture
+	*/
+
+	insertTask := "INSERT INTO task (uuid, collection_id) VALUES "
+	var values string
+	var insertTaskArgs []interface{}
+
+	for _, task := range tasks {
+		values = values + "(?, ?),"
+		insertTaskArgs = append(insertTaskArgs, task.Id, task.CollectionId)
+
+		if len(insertTaskArgs) > 1000 {
+			values = values[:len(values)-len(",")]
+
+			_, err = db.Exec(insertTask+values, insertTaskArgs...)
+			if err != nil {
+				panic(err)
+			}
+
+			values = ""
+			insertTaskArgs = nil
 		}
 	}
 }

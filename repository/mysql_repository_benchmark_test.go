@@ -4,109 +4,101 @@ import (
 	"fmt"
 	"github.com/pvelx/triggerHook/domain"
 	uuid "github.com/satori/go.uuid"
+	"log"
+	"sync"
 	"testing"
 	"time"
 )
 
-//func BenchmarkBunchDelete(b *testing.B) {
-//	clear()
-//	b.ReportAllocs()
-//	b.ResetTimer()
-//	b.StopTimer()
-//
-//	for n := 0; n < b.N; n++ {
-//		var tasks []*domain.Task
-//		for i := 0; i < 50; i++ {
-//			task := &domain.Task{ExecTime: 1}
-//			tasks = append(tasks, task)
-//			err := repository.Create(task, false)
-//			if err != nil {
-//				log.Fatal(err, "Error while create")
-//			}
-//		}
-//
-//		b.StartTimer()
-//		errDelete := repository.DeleteBunch(tasks)
-//		if errDelete != nil {
-//			log.Fatal(errDelete, "Error while delete")
-//		}
-//		b.StopTimer()
-//	}
-//}
+func BenchmarkDelete1000(b *testing.B) {
+	benchmarkDelete(1000, b)
+}
 
-//func BenchmarkBunchChangeStatus(b *testing.B) {
-//	repo := setUp()
-//	b.ReportAllocs()
-//	b.ResetTimer()
-//	b.StopTimer()
-//
-//	for n := 0; n < b.N; n++ {
-//		var tasks []*domain.Task
-//		for i := 0; i < 50; i++ {
-//			task := &domain.Task{ExecTime: 1}
-//			tasks = append(tasks, task)
-//			err := repo.Create(task, false)
-//			if err != nil {
-//				fmt.Println("err")
-//			}
-//		}
-//
-//		b.StartTimer()
-//		err := repo.ChangeStatusToCompletedBunch(tasks)
-//		b.StopTimer()
-//		if err != nil {
-//			fmt.Println(err)
-//		}
-//	}
-//}
+func BenchmarkDelete500(b *testing.B) {
+	benchmarkDelete(500, b)
+}
 
-//func Benchmark4(b *testing.B) {
-//	repo := setUp()
-//	b.ReportAllocs()
-//	b.ResetTimer()
-//	b.StopTimer()
-//
-//	//b.RunParallel(func(pb *testing.PB) {
-//	//	for pb.Next() {
-//	//		task := &domain.Task{ExecTime: 1}
-//	//		err := repo.Create(task, false)
-//	//		if err != nil {
-//	//			fmt.Println("err")
-//	//		}
-//	//		b.StartTimer()
-//	//		repo.Delete(task)
-//	//		b.StopTimer()
-//	//	}
-//	//})
-//
-//	for n := 0; n < b.N; n++ {
-//
-//		task := &domain.Task{ExecTime: 1}
-//		err := repo.Create(task, false)
-//		if err != nil {
-//			fmt.Println("err")
-//		}
-//		b.StartTimer()
-//		repo.Delete(task)
-//		b.StopTimer()
-//		//fmt.Println(len(tasks))
-//	}
-//}
+func BenchmarkDelete100(b *testing.B) {
+	benchmarkDelete(100, b)
+}
 
-func Benchmark3(b *testing.B) {
+func benchmarkDelete(countTaskToDeleteAtOnce int, b *testing.B) {
+	b.ResetTimer()
 	clear()
-	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{1000})
+	countTaskInCollection := 100
+	countCollections := 2000
+	mu := sync.Mutex{}
+
+	var collections []collection
+	var tasks []task
+	taskBunches := make([][]domain.Task, 0, countCollections)
+	taskBunch := make([]domain.Task, 0, countTaskInCollection)
+
+	for c := 1; c <= countCollections; c++ {
+		collections = append(collections, collection{
+			Id:       int64(c),
+			ExecTime: time.Now().Unix() - 10,
+		})
+		for t := 1; t <= countTaskInCollection; t++ {
+			id := uuid.NewV4().String()
+			tasks = append(tasks, task{
+				Id:           id,
+				CollectionId: int64(c),
+			})
+		}
+	}
+
+	for _, task := range tasks {
+		taskBunch = append(taskBunch, domain.Task{Id: task.Id})
+		if len(taskBunch) == countTaskToDeleteAtOnce {
+			taskBunches = append(taskBunches, taskBunch)
+			taskBunch = nil
+		}
+	}
+
+	upFixtures(collections, tasks)
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{
+		1000,
+		10})
+
+	b.SetParallelism(4)
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			b.StopTimer()
+			mu.Lock()
+			if len(taskBunches) == 0 {
+				log.Fatal("very small amount of task to delete")
+			}
+			taskBunch = taskBunches[0]
+			taskBunches = taskBunches[1:]
+			mu.Unlock()
+			b.StartTimer()
+			if err := repository.Delete(taskBunch); err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+}
+
+func BenchmarkCreate(b *testing.B) {
+	clear()
+	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection: 1000})
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	b.StartTimer()
 
-	for n := 0; n < b.N; n++ {
-
-		task := domain.Task{Id: uuid.NewV4().String(), ExecTime: time.Now().Unix()}
-		err := repository.Create(task, false)
-		if err != nil {
-			fmt.Println(err)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			err := repository.Create(domain.Task{
+				Id:       uuid.NewV4().String(),
+				ExecTime: time.Now().Unix(),
+			}, false)
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
-	}
+	})
 }
