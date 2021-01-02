@@ -1,28 +1,41 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/repository"
 	"sync"
 	"time"
 )
 
-func NewPreloadingTaskService(tm contracts.TaskManagerInterface) contracts.PreloadingTaskServiceInterface {
+func NewPreloadingTaskService(
+	taskManager contracts.TaskManagerInterface,
+	eventErrorHandler contracts.EventErrorHandlerInterface,
+) contracts.PreloadingTaskServiceInterface {
 	return &preloadingTaskService{
-		taskManager:           tm,
-		chPreloadedTask:       make(chan domain.Task, 10000000),
-		timePreload:           5 * time.Second,
-		taskNumberInOneSearch: 1000,
+		taskManager:       taskManager,
+		eventErrorHandler: eventErrorHandler,
+		chPreloadedTask:   make(chan domain.Task, 10000000),
+		timePreload:       5 * time.Second,
+
+		/*
+			Coefficient must be more than one. If the coefficient <= 1 then it may lead to save not taken task as taken
+		*/
+		coefTimePreloadOfNewTask: 2,
+		taskNumberInOneSearch:    1000,
+		workersCount:             10,
 	}
 }
 
 type preloadingTaskService struct {
-	taskManager           contracts.TaskManagerInterface
-	chPreloadedTask       chan domain.Task
-	timePreload           time.Duration
-	taskNumberInOneSearch int
+	taskManager              contracts.TaskManagerInterface
+	eventErrorHandler        contracts.EventErrorHandlerInterface
+	chPreloadedTask          chan domain.Task
+	timePreload              time.Duration
+	coefTimePreloadOfNewTask int
+	taskNumberInOneSearch    int
+	workersCount             int
 }
 
 func (s *preloadingTaskService) GetPreloadedChan() <-chan domain.Task {
@@ -31,7 +44,7 @@ func (s *preloadingTaskService) GetPreloadedChan() <-chan domain.Task {
 
 func (s *preloadingTaskService) AddNewTask(task domain.Task) error {
 	relativeTimeToExec := time.Duration(task.ExecTime-time.Now().Unix()) * time.Second
-	isTaken := s.timePreload > relativeTimeToExec
+	isTaken := s.timePreload*time.Duration(s.coefTimePreloadOfNewTask) > relativeTimeToExec
 
 	if err := s.taskManager.Create(task, isTaken); err != nil {
 		return err
@@ -45,30 +58,30 @@ func (s *preloadingTaskService) AddNewTask(task domain.Task) error {
 }
 
 func (s *preloadingTaskService) Preload() {
-	countFails := 0
-
 	for {
 		result, err := s.taskManager.GetTasksToComplete(s.timePreload)
 		switch {
-		case err == repository.NoTasksFound:
-			fmt.Printf("DEBUG: I am sleep %s because does not get any tasks", s.timePreload)
+		case err == contracts.NoTasksFound:
+			fmt.Println(fmt.Sprintf("DEBUG: I am sleep %s because does not get any tasks", s.timePreload))
 			time.Sleep(s.timePreload)
 			continue
 		case err != nil:
-			countFails++
-			time.Sleep(300 * time.Millisecond)
-			if countFails == 10 {
-				panic("Cannot get count of task for doing")
-			}
-			continue
+			/*
+				Stop application
+			*/
+			s.eventErrorHandler.New(
+				contracts.LevelFatal,
+				errors.New("preloader cannot get bunches of tasks"),
+				nil,
+			)
+
+			return
 		}
-		countFails = 0
 
 		var wg sync.WaitGroup
-		workersCount := 10
-		wg.Add(workersCount)
-		for worker := 0; worker < workersCount; worker++ {
-			//workerNum := worker
+
+		wg.Add(s.workersCount)
+		for worker := 0; worker < s.workersCount; worker++ {
 			go func() {
 				for {
 					tasks, isEnd, err := result.Next()
@@ -77,14 +90,12 @@ func (s *preloadingTaskService) Preload() {
 						return
 					}
 					if isEnd {
-						fmt.Printf("break")
+						fmt.Println("DEBUG: end")
 						break
 					}
 					if len(tasks) == 0 {
 						continue
 					}
-					//fmt.Printf("workerId: %d - %d", workerNum, len(tasks))
-					//fmt.Println()
 
 					for _, task := range tasks {
 						s.chPreloadedTask <- task

@@ -17,6 +17,9 @@ type taskManager struct {
 }
 
 func (s *taskManager) Create(task domain.Task, isTaken bool) error {
+	if now := time.Now().Unix(); task.ExecTime < now {
+		task.ExecTime = now
+	}
 	if err := s.repo.Create(task, isTaken); err != nil {
 		err := errors.New(err.Error())
 		return err

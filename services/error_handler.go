@@ -6,8 +6,8 @@ func NewEventErrorHandler() contracts.EventErrorHandlerInterface {
 	return &EventErrorHandler{chEventError: make(chan contracts.EventError, 10000000)}
 }
 
-func (eeh *EventErrorHandler) NewEventError(level contracts.Level, error error) {
-	eeh.chEventError <- contracts.EventError{Level: level, Error: error}
+func (eeh *EventErrorHandler) New(level contracts.Level, error error, context interface{}) {
+	eeh.chEventError <- contracts.EventError{Level: level, Error: error, Context: context}
 }
 
 type EventErrorHandler struct {

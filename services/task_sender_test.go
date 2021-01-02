@@ -1,7 +1,6 @@
 package services
 
 import (
-	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
@@ -9,15 +8,6 @@ import (
 	"testing"
 	"time"
 )
-
-type taskManagerMock struct {
-	contracts.TaskManagerInterface
-	confirmExecutionMock func(tasks []domain.Task) error
-}
-
-func (tm *taskManagerMock) ConfirmExecution(tasks []domain.Task) error {
-	return tm.confirmExecutionMock(tasks)
-}
 
 func createReadyToSendTask(chTaskReadyToSend chan domain.Task, count int) {
 	for i := 0; i < count; i++ {

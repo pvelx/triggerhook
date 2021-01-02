@@ -1,6 +1,7 @@
 package contracts
 
 import (
+	"errors"
 	"github.com/pvelx/triggerHook/domain"
 	"time"
 )
@@ -43,6 +44,20 @@ type RepositoryInterface interface {
 	Up() error
 }
 
+/*
+	Repository errors
+*/
+var (
+	FailCreatingTask = errors.New("creating the task was fail")
+	FailDeletingTask = errors.New("deleting the task was fail")
+	FailGettingTasks = errors.New("getting the tasks were fail")
+	FailFindingTasks = errors.New("finding the tasks were fail")
+	NoTasksFound     = errors.New("no tasks found")
+	TaskExist        = errors.New("task with the uuid already exist")
+	Deadlock         = errors.New("deadlock, please retry")
+	FailSchemaSetup  = errors.New("schema setup failed")
+)
+
 type PreloadingTaskServiceInterface interface {
 	AddNewTask(task domain.Task) error
 	GetPreloadedChan() <-chan domain.Task
@@ -66,13 +81,19 @@ const (
 )
 
 type EventError struct {
-	Level Level
-	Error error
+	Level   Level
+	Error   error
+	Context interface{}
 }
 
 type EventErrorHandlerInterface interface {
+
+	//YOU SHOULD TAKE CARE HANDLE EVENT, FOR EXAMPLE, FOR WRITE A LOG
 	SetErrorHandler(func(EventError))
-	NewEventError(level Level, error error)
+
+	//Throws new event. May be used parallel
+	New(level Level, error error, context interface{})
+
 	Listen() error
 }
 

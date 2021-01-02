@@ -24,7 +24,7 @@ func Default(client *sql.DB) contracts.TasksDeferredInterface {
 	}
 
 	taskManager := services.NewTaskManager(repo)
-	preloadingTaskService := services.NewPreloadingTaskService(taskManager)
+	preloadingTaskService := services.NewPreloadingTaskService(taskManager, eventErrorHandler)
 
 	waitingTaskService := services.NewWaitingTaskService(preloadingTaskService.GetPreloadedChan())
 

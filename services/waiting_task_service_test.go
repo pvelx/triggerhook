@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -11,7 +12,7 @@ import (
 func taskBunch(execTime int64, count int) []domain.Task {
 	var taskBunch []domain.Task
 	for i := 0; i < count; i++ {
-		taskBunch = append(taskBunch, domain.Task{Id: int64(i), ExecTime: execTime})
+		taskBunch = append(taskBunch, domain.Task{Id: uuid.NewV4().String(), ExecTime: execTime})
 	}
 	return taskBunch
 }
@@ -19,7 +20,7 @@ func taskBunch(execTime int64, count int) []domain.Task {
 func Test(t *testing.T) {
 	chPreloadedTask := make(chan domain.Task, 10000)
 	chTasksReadyToSend := make(chan domain.Task, 10000)
-	waitingTaskService := NewWaitingTaskService(chPreloadedTask, chTasksReadyToSend)
+	waitingTaskService := NewWaitingTaskService(chPreloadedTask)
 	countOfTasksOnSameTime := 1000
 	countOfSeconds := 10
 	var pauseSec float32 = 0.5

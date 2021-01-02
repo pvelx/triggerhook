@@ -187,10 +187,9 @@ func TestParallel(t *testing.T) {
 	taskCount := 0
 	preloadingTimeRange := 5 * time.Second
 	maxCountTasksInCollection := 1000
-	var cleaningFrequency int32 = 10
+	var cleaningFrequency int32 = 1
 	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection, cleaningFrequency})
 
-	now := time.Now().Unix()
 	input := []struct {
 		tasksCount       int
 		isTaken          bool
@@ -217,7 +216,7 @@ func TestParallel(t *testing.T) {
 		go func() {
 			for _, item := range input {
 				for i := 0; i < item.tasksCount; i++ {
-					errCreate := repository.Create(getTaskInstance(now+item.relativeExecTime), item.isTaken)
+					errCreate := repository.Create(getTaskInstance(time.Now().Unix()+item.relativeExecTime), item.isTaken)
 					if errCreate != nil {
 						log.Fatal(errCreate, "Error while create")
 					}
@@ -230,7 +229,7 @@ func TestParallel(t *testing.T) {
 	go func() {
 		for {
 			collections, err := repository.FindBySecToExecTime(preloadingTimeRange)
-			if err == NoTasksFound {
+			if err == contracts.NoTasksFound {
 				time.Sleep(preloadingTimeRange)
 				continue
 			}

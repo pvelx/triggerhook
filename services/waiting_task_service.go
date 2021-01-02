@@ -97,7 +97,6 @@ func (s *waitingTaskService) WaitUntilExecTime() {
 			}
 			select {
 			case <-timer.C:
-				break
 			case <-updatedQueue:
 				if !timer.Stop() {
 					<-timer.C
