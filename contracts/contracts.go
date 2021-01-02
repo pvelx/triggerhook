@@ -81,9 +81,10 @@ const (
 )
 
 type EventError struct {
-	Level   Level
-	Error   error
-	Context interface{}
+	Timestamp time.Time
+	Level     Level
+	Error     error
+	Context   interface{}
 }
 
 type EventErrorHandlerInterface interface {

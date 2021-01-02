@@ -64,24 +64,23 @@ type mysqlRepository struct {
 func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 	ctx := context.Background()
 
-	_, err := r.client.ExecContext(
-		ctx,
-		"CALL create_task(?, ?, ?, ?, ?)",
+	createTaskQuery := "CALL create_task(?, ?, ?, ?, ?)"
+	args := []interface{}{
 		r.appInstanceId,
 		task.Id,
 		task.ExecTime,
 		isTaken,
 		r.options.maxCountTasksInCollection,
-	)
+	}
 
-	if err != nil {
+	if _, err := r.client.ExecContext(ctx, createTaskQuery, args...); err != nil {
 		errCreating := contracts.FailCreatingTask
 
-		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
+		if err, ok := err.(*mysql.MySQLError); ok {
 			switch {
-			case mysqlErr.Number == mysqlerr.ER_DUP_ENTRY:
+			case err.Number == mysqlerr.ER_DUP_ENTRY:
 				errCreating = contracts.TaskExist
-			case mysqlErr.Number == mysqlerr.ER_LOCK_DEADLOCK:
+			case err.Number == mysqlerr.ER_LOCK_DEADLOCK:
 				errCreating = contracts.Deadlock
 			}
 		}
@@ -97,37 +96,36 @@ func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 	return nil
 }
 
-func (r *mysqlRepository) Delete(tasks []domain.Task) error {
+func (r *mysqlRepository) Delete(tasks []domain.Task) (error error) {
 	//fmt.Println(fmt.Sprintf("DEBUG Repository Delete: start deleting %d tasks", len(tasks)))
 	if len(tasks) == 0 {
 		return nil
 	}
 
 	ctx := context.Background()
-	var deleteTasksArg []interface{}
+	var args []interface{}
 	for _, task := range tasks {
-		deleteTasksArg = append(deleteTasksArg, task.Id)
+		args = append(args, task.Id)
 	}
 
-	_, errDeleteTask := r.client.ExecContext(ctx,
-		fmt.Sprintf("DELETE FROM task WHERE uuid IN (%s)", "?"+strings.Repeat(",?", len(tasks)-1)),
-		deleteTasksArg...)
-	if errDeleteTask != nil {
+	deletingTaskQuery := fmt.Sprintf("DELETE FROM task WHERE uuid IN (?%s)",
+		strings.Repeat(",?", len(tasks)-1))
 
-		errCreating := contracts.FailDeletingTask
+	if _, err := r.client.ExecContext(ctx, deletingTaskQuery, args...); err != nil {
+		error = contracts.FailDeletingTask
 
-		if mysqlErr, ok := errDeleteTask.(*mysql.MySQLError); ok {
+		if err, ok := err.(*mysql.MySQLError); ok {
 			switch {
-			case mysqlErr.Number == mysqlerr.ER_LOCK_DEADLOCK:
-				errCreating = contracts.Deadlock
+			case err.Number == mysqlerr.ER_LOCK_DEADLOCK:
+				error = contracts.Deadlock
 			}
 		}
 
-		r.erh.New(contracts.LevelError, errCreating, map[string]string{
-			"child error": errDeleteTask.Error(),
+		r.erh.New(contracts.LevelError, error, map[string]string{
+			"child error": err.Error(),
 		})
 
-		return errCreating
+		return
 	}
 
 	/*
@@ -154,31 +152,37 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 			SELECT t.uuid FROM task t WHERE t.collection_id = c.id
 		)`
 
-	resultCollectionsId, err := r.client.QueryContext(ctx, findCollectionsQuery)
-	if err != nil {
-		return errors.Wrap(err, "deleting empty collections is fail")
+	rows, errFinding := r.client.QueryContext(ctx, findCollectionsQuery)
+	if errFinding != nil {
+		return errors.Wrap(errFinding, "deleting empty collections is fail")
 	}
 
-	defer resultCollectionsId.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.erh.New(contracts.LevelError, err, nil)
+		}
+	}()
 
 	var ids []interface{}
-	for resultCollectionsId.Next() {
-		var collectionId int64
-		scanCollectionErr := resultCollectionsId.Scan(&collectionId)
-		if scanCollectionErr != nil {
-			return errors.Wrap(scanCollectionErr, "scan collection error")
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return errors.Wrap(err, "scan collection error")
 		}
-		ids = append(ids, collectionId)
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return errors.Wrap(err, "scan collection error")
 	}
 
 	//fmt.Println(fmt.Sprintf("DEBUG Repository deleteEmptyCollections: found %d collections to delete", len(collectionsIds)))
 
 	if len(ids) > 0 {
-		_, errClear := r.client.ExecContext(ctx,
-			fmt.Sprintf("DELETE FROM collection c WHERE id IN(%s)", "?"+strings.Repeat(",?", len(ids)-1)),
-			ids...)
-		if errClear != nil {
-			return errors.Wrap(errClear, "clearing collections was fail")
+		deleteCollectionsQuery := fmt.Sprintf("DELETE FROM collection c WHERE id IN(?%s)",
+			strings.Repeat(",?", len(ids)-1))
+
+		if _, err := r.client.ExecContext(ctx, deleteCollectionsQuery, ids...); err != nil {
+			return errors.Wrap(err, "clearing collections was fail")
 		}
 
 		//fmt.Println(fmt.Sprintf("DEBUG Repository deleteEmptyCollections: cleaned %d empty collections", affected))
@@ -195,31 +199,44 @@ func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks domain
 		INNER JOIN collection c on t.collection_id = c.id
 		WHERE t.collection_id = ?`
 
-	resultTasks, errExec := r.client.QueryContext(ctx, queryFindBySecToExecTime, collectionId)
-	if errExec != nil {
+	rows, errFinding := r.client.QueryContext(ctx, queryFindBySecToExecTime, collectionId)
+	if errFinding != nil {
 		error = contracts.FailGettingTasks
 		r.erh.New(contracts.LevelError, error, map[string]string{
-			"child error":   errExec.Error(),
+			"child error":   errFinding.Error(),
 			"collection id": fmt.Sprintf("%d", collectionId),
 		})
 
 		return
 	}
 
-	defer resultTasks.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.erh.New(contracts.LevelError, err, nil)
+		}
+	}()
 
-	for resultTasks.Next() {
+	for rows.Next() {
 		var task domain.Task
-		if getErr := resultTasks.Scan(&task.Id, &task.ExecTime); getErr != nil {
+		if err := rows.Scan(&task.Id, &task.ExecTime); err != nil {
 			error = contracts.FailGettingTasks
 			r.erh.New(contracts.LevelError, error, map[string]string{
-				"child error":   getErr.Error(),
+				"child error":   err.Error(),
 				"collection id": fmt.Sprintf("%d", collectionId),
 			})
 
 			return
 		}
 		tasks = append(tasks, task)
+	}
+	if err := rows.Err(); err != nil {
+		error = contracts.FailGettingTasks
+		r.erh.New(contracts.LevelError, error, map[string]string{
+			"child error":   err.Error(),
+			"collection id": fmt.Sprintf("%d", collectionId),
+		})
+
+		return
 	}
 
 	//fmt.Println(fmt.Sprintf("DEBUG Repository getTasksByCollection: get %d tasks of collection %d", len(results), collectionId))
@@ -231,43 +248,56 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 	toNextExecTime := time.Now().Add(preloadingTimeRange).Unix()
 	ctx := context.Background()
 	//fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: begin tx collection"))
-	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{
+	tx, errTx := r.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
 	})
-	if err != nil {
+	if errTx != nil {
 		error = contracts.FailFindingTasks
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": err.Error()})
+		r.erh.New(contracts.LevelError, error, map[string]string{"child error": errTx.Error()})
 
 		return
 	}
 
-	const queryFindBySecToExecTime = `SELECT id 
+	queryFindBySecToExecTime := `SELECT id 
 		FROM collection
 		WHERE exec_time <= ? AND taken_by_instance != ?
 		ORDER BY exec_time
 		FOR UPDATE`
 
-	rows, errExec := tx.QueryContext(ctx, queryFindBySecToExecTime, toNextExecTime, r.appInstanceId)
-	if errExec != nil {
+	rows, errFinding := tx.QueryContext(ctx, queryFindBySecToExecTime, toNextExecTime, r.appInstanceId)
+	if errFinding != nil {
 		error = contracts.FailFindingTasks
-		childError := errExec
-		if errorRollback := tx.Rollback(); errorRollback != nil {
-			childError = errorRollback
+
+		if err, ok := errFinding.(*mysql.MySQLError); ok {
+			switch {
+			case err.Number == mysqlerr.ER_LOCK_DEADLOCK:
+				error = contracts.Deadlock
+			}
+		}
+
+		childError := errFinding
+		if err := tx.Rollback(); err != nil {
+			childError = errors.Wrap(childError, err.Error())
 		}
 		r.erh.New(contracts.LevelError, error, map[string]string{"child error": childError.Error()})
 
 		return
 	}
-	defer rows.Close()
 
-	args := make([]interface{}, 0, 1000)
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.erh.New(contracts.LevelError, err, nil)
+		}
+	}()
+
+	var collectionIds []int64
+	var args []interface{}
 	args = append(args, r.appInstanceId)
-	collectionIds := make([]int64, 0, 1000)
 	for rows.Next() {
 		var collectionId int64
-		if getErr := rows.Scan(&collectionId); getErr != nil {
+		if err := rows.Scan(&collectionId); err != nil {
 			error = contracts.FailFindingTasks
-			r.erh.New(contracts.LevelError, error, map[string]string{"child error": getErr.Error()})
+			r.erh.New(contracts.LevelError, error, map[string]string{"child error": err.Error()})
 
 			return
 		}
@@ -275,10 +305,10 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 		args = append(args, collectionId)
 		collectionIds = append(collectionIds, collectionId)
 	}
-	if err = rows.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		childError := err
-		if errorRollback := tx.Rollback(); errorRollback != nil {
-			childError = errorRollback
+		if err := tx.Rollback(); err != nil {
+			childError = errors.Wrap(childError, err.Error())
 		}
 
 		error = contracts.FailFindingTasks
@@ -291,9 +321,9 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 
 	if len(collectionIds) == 0 {
 		//fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: end tx collection"))
-		if errCommit := tx.Commit(); errCommit != nil {
+		if err := tx.Commit(); err != nil {
 			error = contracts.FailFindingTasks
-			r.erh.New(contracts.LevelError, error, map[string]string{"child error": errCommit.Error()})
+			r.erh.New(contracts.LevelError, error, map[string]string{"child error": err.Error()})
 			return
 		}
 		return nil, contracts.NoTasksFound
@@ -302,22 +332,31 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 	newQueryLockTasks := fmt.Sprintf("UPDATE collection SET taken_by_instance = ? WHERE id IN(?%s)",
 		strings.Repeat(",?", len(collectionIds)-1))
 
-	if _, errUpdate := tx.ExecContext(ctx, newQueryLockTasks, args...); errUpdate != nil {
-		childError := errUpdate
-		if errorRollback := tx.Rollback(); errorRollback != nil {
-			childError = errorRollback
+	if _, err := tx.ExecContext(ctx, newQueryLockTasks, args...); err != nil {
+		error = contracts.FailFindingTasks
+		childError := err
+
+		if err, ok := err.(*mysql.MySQLError); ok {
+			switch {
+			case err.Number == mysqlerr.ER_LOCK_DEADLOCK:
+				error = contracts.Deadlock
+			}
 		}
 
-		error = contracts.FailFindingTasks
+		if err := tx.Rollback(); err != nil {
+			childError = errors.Wrap(childError, err.Error())
+		}
+
 		r.erh.New(contracts.LevelError, error, map[string]string{"child error": childError.Error()})
 
 		return
 	}
 
 	//fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: end tx collection"))
-	if errCommit := tx.Commit(); errCommit != nil {
+	if err := tx.Commit(); err != nil {
 		error = contracts.FailFindingTasks
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": errCommit.Error()})
+		r.erh.New(contracts.LevelError, error, map[string]string{"child error": err.Error()})
+
 		return
 	}
 
@@ -350,11 +389,12 @@ func (r *mysqlRepository) Up() (error error) {
 			INDEX (exec_time)
 		)`
 
-	if _, errorQuery := tx.ExecContext(ctx, createCollectionTableQuery); errorQuery != nil {
-		childError := errorQuery
-		if errorRollback := tx.Rollback(); errorRollback != nil {
-			childError = errorRollback
+	if _, err := tx.ExecContext(ctx, createCollectionTableQuery); err != nil {
+		childError := err
+		if err := tx.Rollback(); err != nil {
+			childError = errors.Wrap(childError, err.Error())
 		}
+
 		error = contracts.FailSchemaSetup
 		r.erh.New(contracts.LevelError, error, map[string]string{"child error": childError.Error()})
 
@@ -368,10 +408,10 @@ func (r *mysqlRepository) Up() (error error) {
 			CONSTRAINT task_collection_id_fk FOREIGN KEY (collection_id) REFERENCES collection (id)
 		)`
 
-	if _, errorQuery := tx.ExecContext(ctx, createTaskTableQuery); errorQuery != nil {
-		childError := errorQuery
-		if errorRollback := tx.Rollback(); errorRollback != nil {
-			childError = errorRollback
+	if _, err := tx.ExecContext(ctx, createTaskTableQuery); err != nil {
+		childError := err
+		if err := tx.Rollback(); err != nil {
+			childError = errors.Wrap(childError, err.Error())
 		}
 
 		error = contracts.FailSchemaSetup
@@ -421,21 +461,21 @@ func (r *mysqlRepository) Up() (error error) {
 	if _, errorQuery := tx.ExecContext(ctx, createCreateTaskProcedure); errorQuery != nil {
 		mysqlErr, ok := errorQuery.(*mysql.MySQLError)
 		if !ok || mysqlErr.Number != mysqlerr.ER_SP_ALREADY_EXISTS {
+			error = contracts.FailSchemaSetup
 			childError := errorQuery
-			if errorRollback := tx.Rollback(); errorRollback != nil {
-				childError = errorRollback
+			if err := tx.Rollback(); err != nil {
+				childError = errors.Wrap(childError, err.Error())
 			}
 
-			error = contracts.FailSchemaSetup
 			r.erh.New(contracts.LevelError, error, map[string]string{"child error": childError.Error()})
 
 			return
 		}
 	}
 
-	if errCommit := tx.Commit(); errCommit != nil {
+	if err := tx.Commit(); err != nil {
 		error = contracts.FailFindingTasks
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": errCommit.Error()})
+		r.erh.New(contracts.LevelError, error, map[string]string{"child error": err.Error()})
 
 		return
 	}

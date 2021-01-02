@@ -1,13 +1,21 @@
 package services
 
-import "github.com/pvelx/triggerHook/contracts"
+import (
+	"github.com/pvelx/triggerHook/contracts"
+	"time"
+)
 
 func NewEventErrorHandler() contracts.EventErrorHandlerInterface {
 	return &EventErrorHandler{chEventError: make(chan contracts.EventError, 10000000)}
 }
 
 func (eeh *EventErrorHandler) New(level contracts.Level, error error, context interface{}) {
-	eeh.chEventError <- contracts.EventError{Level: level, Error: error, Context: context}
+	eeh.chEventError <- contracts.EventError{
+		Timestamp: time.Now(),
+		Level:     level,
+		Error:     error,
+		Context:   context,
+	}
 }
 
 type EventErrorHandler struct {
