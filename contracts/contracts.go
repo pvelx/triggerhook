@@ -78,22 +78,28 @@ const (
 
 	//Must be delivered to support
 	LevelError
+
+	//Must be disabled in production
+	LevelDebug
 )
 
 type EventError struct {
-	Timestamp time.Time
-	Level     Level
-	Error     error
-	Context   interface{}
+	Time         time.Time
+	Level        Level
+	EventMessage string
+	Method       string
+	Line         int
+	File         string
+	Extra        interface{}
 }
 
 type EventErrorHandlerInterface interface {
 
 	//YOU SHOULD TAKE CARE HANDLE EVENT, FOR EXAMPLE, FOR WRITE A LOG
-	SetErrorHandler(func(EventError))
+	SetErrorHandler(level Level, eventHandler func(event EventError))
 
 	//Throws new event. May be used parallel
-	New(level Level, error error, context interface{})
+	New(level Level, eventMessage string, extra map[string]interface{})
 
 	Listen() error
 }
