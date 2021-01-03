@@ -8,6 +8,10 @@ import (
 
 type taskManagerMock struct {
 	contracts.TaskManagerInterface
+
+	/*
+		You need to substitute *Mock methods to do substitute original functions
+	*/
 	confirmExecutionMock   func(tasks []domain.Task) error
 	createMock             func(task domain.Task, isTaken bool) error
 	getTasksToCompleteMock func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error)
