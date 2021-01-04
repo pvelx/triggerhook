@@ -1,7 +1,6 @@
 package services
 
 import (
-	"errors"
 	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
@@ -14,10 +13,10 @@ func NewPreloadingTaskService(
 	eventErrorHandler contracts.EventErrorHandlerInterface,
 ) contracts.PreloadingTaskServiceInterface {
 	return &preloadingTaskService{
-		taskManager:       taskManager,
-		eventErrorHandler: eventErrorHandler,
-		chPreloadedTask:   make(chan domain.Task, 10000000),
-		timePreload:       5 * time.Second,
+		taskManager:     taskManager,
+		eh:              eventErrorHandler,
+		chPreloadedTask: make(chan domain.Task, 10000000),
+		timePreload:     5 * time.Second,
 
 		/*
 			Coefficient must be more than one. If the coefficient <= 1 then it may lead to save not taken task as taken
@@ -30,7 +29,7 @@ func NewPreloadingTaskService(
 
 type preloadingTaskService struct {
 	taskManager              contracts.TaskManagerInterface
-	eventErrorHandler        contracts.EventErrorHandlerInterface
+	eh                       contracts.EventErrorHandlerInterface
 	chPreloadedTask          chan domain.Task
 	timePreload              time.Duration
 	coefTimePreloadOfNewTask int
@@ -62,35 +61,33 @@ func (s *preloadingTaskService) Preload() {
 		result, err := s.taskManager.GetTasksToComplete(s.timePreload)
 		switch {
 		case err == contracts.NoTasksFound:
-			fmt.Println(fmt.Sprintf("DEBUG: I am sleep %s because does not get any tasks", s.timePreload))
+			s.eh.New(contracts.LevelDebug, fmt.Sprintf("I go to sleep because I don't get any tasks"), nil)
 			time.Sleep(s.timePreload)
 			continue
 		case err != nil:
 			/*
 				Stop application
 			*/
-			s.eventErrorHandler.New(
-				contracts.LevelFatal,
-				errors.New("preloader cannot get bunches of tasks"),
-				nil,
-			)
+			s.eh.New(contracts.LevelFatal, "preloader cannot get bunches of tasks", nil)
 
 			return
 		}
 
 		var wg sync.WaitGroup
-
 		wg.Add(s.workersCount)
 		for worker := 0; worker < s.workersCount; worker++ {
 			go func() {
 				for {
 					tasks, isEnd, err := result.Next()
+					s.eh.New(contracts.LevelDebug, fmt.Sprintf("preloaded tasks"), map[string]interface{}{
+						"tasks count": len(tasks),
+					})
 					if err != nil {
-						panic("Cannot get tasks for doing")
+						s.eh.New(contracts.LevelFatal, fmt.Sprintf("cannot get tasks for doing"), nil)
 						return
 					}
 					if isEnd {
-						fmt.Println("DEBUG: end")
+						s.eh.New(contracts.LevelDebug, fmt.Sprintf("end"), nil)
 						break
 					}
 					if len(tasks) == 0 {

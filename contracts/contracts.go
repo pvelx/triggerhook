@@ -33,6 +33,13 @@ type TaskManagerInterface interface {
 	ConfirmExecution(task []domain.Task) error
 }
 
+var (
+	TmErrorCreatingTasks     = errors.New("cannot confirm execution of tasks")
+	TmErrorConfirmationTasks = errors.New("cannot confirm execution of tasks")
+	TmErrorGetTasks          = errors.New("cannot get any tasks")
+	TmErrorDeletingTask      = errors.New("cannot delete task")
+)
+
 type CollectionsInterface interface {
 	Next() (tasks []domain.Task, isEnd bool, err error)
 }

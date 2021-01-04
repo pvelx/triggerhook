@@ -10,14 +10,14 @@ type ErrorHandlerMock struct {
 	/*
 		You need to substitute *Mock methods to do substitute original functions
 	*/
-	setErrorHandlerMock func(level contracts.Level, eventHandler func(event contracts.EventError))
-	newMock             func(level contracts.Level, eventMessage string, extra map[string]interface{})
+	SetErrorHandlerMock func(level contracts.Level, eventHandler func(event contracts.EventError))
+	NewMock             func(level contracts.Level, eventMessage string, extra map[string]interface{})
 }
 
 func (tm *ErrorHandlerMock) SetErrorHandler(level contracts.Level, eventHandler func(event contracts.EventError)) {
-	tm.setErrorHandlerMock(level, eventHandler)
+	tm.SetErrorHandlerMock(level, eventHandler)
 }
 
 func (tm *ErrorHandlerMock) New(level contracts.Level, eventMessage string, extra map[string]interface{}) {
-	tm.newMock(level, eventMessage, extra)
+	tm.NewMock(level, eventMessage, extra)
 }

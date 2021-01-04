@@ -23,7 +23,7 @@ func Default(client *sql.DB) contracts.TasksDeferredInterface {
 		panic(err)
 	}
 
-	taskManager := services.NewTaskManager(repo)
+	taskManager := services.NewTaskManager(repo, eventErrorHandler)
 	preloadingTaskService := services.NewPreloadingTaskService(taskManager, eventErrorHandler)
 
 	waitingTaskService := services.NewWaitingTaskService(preloadingTaskService.GetPreloadedChan())

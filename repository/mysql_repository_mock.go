@@ -12,27 +12,27 @@ type RepositoryMock struct {
 	/*
 		You need to substitute *Mock methods to do substitute original functions
 	*/
-	createMock              func(task domain.Task, isTaken bool) error
-	deleteMock              func(tasks []domain.Task) error
-	findBySecToExecTimeMock func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error)
-	upMock                  func() error
+	CreateMock              func(task domain.Task, isTaken bool) error
+	DeleteMock              func(tasks []domain.Task) error
+	FindBySecToExecTimeMock func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error)
+	UpMock                  func() error
 }
 
 func (r *RepositoryMock) Create(task domain.Task, isTaken bool) error {
-	return r.createMock(task, isTaken)
+	return r.CreateMock(task, isTaken)
 }
 
 func (r *RepositoryMock) Delete(tasks []domain.Task) (error error) {
-	return r.deleteMock(tasks)
+	return r.DeleteMock(tasks)
 }
 
 func (r *RepositoryMock) Up() (error error) {
-	return r.upMock()
+	return r.UpMock()
 }
 
 func (r *RepositoryMock) FindBySecToExecTime(preloadingTimeRange time.Duration) (
 	collection contracts.CollectionsInterface,
 	error error,
 ) {
-	return r.findBySecToExecTimeMock(preloadingTimeRange)
+	return r.FindBySecToExecTimeMock(preloadingTimeRange)
 }

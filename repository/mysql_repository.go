@@ -31,7 +31,7 @@ type Options struct {
 
 func NewRepository(
 	client *sql.DB, appInstanceId string,
-	erh contracts.EventErrorHandlerInterface,
+	eer contracts.EventErrorHandlerInterface,
 	options *Options,
 ) contracts.RepositoryInterface {
 	if options == nil {
@@ -47,7 +47,7 @@ func NewRepository(
 	return &mysqlRepository{
 		client,
 		appInstanceId,
-		erh,
+		eer,
 		0,
 		options,
 	}
@@ -56,7 +56,7 @@ func NewRepository(
 type mysqlRepository struct {
 	client            *sql.DB
 	appInstanceId     string
-	erh               contracts.EventErrorHandlerInterface
+	eer               contracts.EventErrorHandlerInterface
 	cleanRequestCount int32
 	options           *Options
 }
@@ -85,10 +85,7 @@ func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 			}
 		}
 
-		r.erh.New(contracts.LevelError, errCreating, map[string]string{
-			"task id":     task.Id,
-			"child error": err.Error(),
-		})
+		r.eer.New(contracts.LevelError, err.Error(), map[string]interface{}{"task": task})
 
 		return errCreating
 	}
@@ -121,9 +118,7 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (error error) {
 			}
 		}
 
-		r.erh.New(contracts.LevelError, error, map[string]string{
-			"child error": err.Error(),
-		})
+		r.eer.New(contracts.LevelError, err.Error(), nil)
 
 		return
 	}
@@ -135,7 +130,7 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (error error) {
 	atomic.AddInt32(&r.cleanRequestCount, 1)
 	if r.options.cleaningFrequency > 0 && atomic.LoadInt32(&r.cleanRequestCount)%r.options.cleaningFrequency == 0 {
 		if err := r.deleteEmptyCollections(); err != nil {
-			r.erh.New(contracts.LevelError, err, nil)
+			r.eer.New(contracts.LevelError, err.Error(), nil)
 		}
 		atomic.StoreInt32(&r.cleanRequestCount, 0)
 	}
@@ -159,7 +154,7 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 
 	defer func() {
 		if err := rows.Close(); err != nil {
-			r.erh.New(contracts.LevelError, err, nil)
+			r.eer.New(contracts.LevelError, err.Error(), nil)
 		}
 	}()
 
@@ -202,17 +197,14 @@ func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks domain
 	rows, errFinding := r.client.QueryContext(ctx, queryFindBySecToExecTime, collectionId)
 	if errFinding != nil {
 		error = contracts.FailGettingTasks
-		r.erh.New(contracts.LevelError, error, map[string]string{
-			"child error":   errFinding.Error(),
-			"collection id": fmt.Sprintf("%d", collectionId),
-		})
+		r.eer.New(contracts.LevelError, errFinding.Error(), map[string]interface{}{"collection id": collectionId})
 
 		return
 	}
 
 	defer func() {
 		if err := rows.Close(); err != nil {
-			r.erh.New(contracts.LevelError, err, nil)
+			r.eer.New(contracts.LevelError, err.Error(), nil)
 		}
 	}()
 
@@ -220,10 +212,7 @@ func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks domain
 		var task domain.Task
 		if err := rows.Scan(&task.Id, &task.ExecTime); err != nil {
 			error = contracts.FailGettingTasks
-			r.erh.New(contracts.LevelError, error, map[string]string{
-				"child error":   err.Error(),
-				"collection id": fmt.Sprintf("%d", collectionId),
-			})
+			r.eer.New(contracts.LevelError, err.Error(), map[string]interface{}{"collection id": collectionId})
 
 			return
 		}
@@ -231,10 +220,7 @@ func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks domain
 	}
 	if err := rows.Err(); err != nil {
 		error = contracts.FailGettingTasks
-		r.erh.New(contracts.LevelError, error, map[string]string{
-			"child error":   err.Error(),
-			"collection id": fmt.Sprintf("%d", collectionId),
-		})
+		r.eer.New(contracts.LevelError, err.Error(), map[string]interface{}{"collection id": collectionId})
 
 		return
 	}
@@ -253,7 +239,7 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 	})
 	if errTx != nil {
 		error = contracts.FailFindingTasks
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": errTx.Error()})
+		r.eer.New(contracts.LevelError, errTx.Error(), nil)
 
 		return
 	}
@@ -279,14 +265,14 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 		if err := tx.Rollback(); err != nil {
 			childError = errors.Wrap(childError, err.Error())
 		}
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": childError.Error()})
+		r.eer.New(contracts.LevelError, childError.Error(), nil)
 
 		return
 	}
 
 	defer func() {
 		if err := rows.Close(); err != nil {
-			r.erh.New(contracts.LevelError, err, nil)
+			r.eer.New(contracts.LevelError, err.Error(), nil)
 		}
 	}()
 
@@ -297,7 +283,7 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 		var collectionId int64
 		if err := rows.Scan(&collectionId); err != nil {
 			error = contracts.FailFindingTasks
-			r.erh.New(contracts.LevelError, error, map[string]string{"child error": err.Error()})
+			r.eer.New(contracts.LevelError, err.Error(), nil)
 
 			return
 		}
@@ -312,7 +298,7 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 		}
 
 		error = contracts.FailFindingTasks
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": childError.Error()})
+		r.eer.New(contracts.LevelError, childError.Error(), nil)
 
 		return
 	}
@@ -323,7 +309,7 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 		//fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: end tx collection"))
 		if err := tx.Commit(); err != nil {
 			error = contracts.FailFindingTasks
-			r.erh.New(contracts.LevelError, error, map[string]string{"child error": err.Error()})
+			r.eer.New(contracts.LevelError, err.Error(), nil)
 			return
 		}
 		return nil, contracts.NoTasksFound
@@ -347,7 +333,7 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 			childError = errors.Wrap(childError, err.Error())
 		}
 
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": childError.Error()})
+		r.eer.New(contracts.LevelError, childError.Error(), nil)
 
 		return
 	}
@@ -355,7 +341,7 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 	//fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: end tx collection"))
 	if err := tx.Commit(); err != nil {
 		error = contracts.FailFindingTasks
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": err.Error()})
+		r.eer.New(contracts.LevelError, err.Error(), nil)
 
 		return
 	}
@@ -376,7 +362,7 @@ func (r *mysqlRepository) Up() (error error) {
 	})
 	if errorTx != nil {
 		error = contracts.FailSchemaSetup
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": errorTx.Error()})
+		r.eer.New(contracts.LevelError, errorTx.Error(), nil)
 
 		return
 	}
@@ -396,7 +382,7 @@ func (r *mysqlRepository) Up() (error error) {
 		}
 
 		error = contracts.FailSchemaSetup
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": childError.Error()})
+		r.eer.New(contracts.LevelError, childError.Error(), nil)
 
 		return
 	}
@@ -415,7 +401,7 @@ func (r *mysqlRepository) Up() (error error) {
 		}
 
 		error = contracts.FailSchemaSetup
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": childError.Error()})
+		r.eer.New(contracts.LevelError, childError.Error(), nil)
 
 		return
 	}
@@ -467,7 +453,7 @@ func (r *mysqlRepository) Up() (error error) {
 				childError = errors.Wrap(childError, err.Error())
 			}
 
-			r.erh.New(contracts.LevelError, error, map[string]string{"child error": childError.Error()})
+			r.eer.New(contracts.LevelError, childError.Error(), nil)
 
 			return
 		}
@@ -475,7 +461,7 @@ func (r *mysqlRepository) Up() (error error) {
 
 	if err := tx.Commit(); err != nil {
 		error = contracts.FailFindingTasks
-		r.erh.New(contracts.LevelError, error, map[string]string{"child error": err.Error()})
+		r.eer.New(contracts.LevelError, err.Error(), nil)
 
 		return
 	}
