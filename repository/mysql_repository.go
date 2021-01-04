@@ -62,8 +62,6 @@ type mysqlRepository struct {
 }
 
 func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
-	ctx := context.Background()
-
 	createTaskQuery := "CALL create_task(?, ?, ?, ?, ?)"
 	args := []interface{}{
 		r.appInstanceId,
@@ -73,7 +71,7 @@ func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 		r.options.maxCountTasksInCollection,
 	}
 
-	if _, err := r.client.ExecContext(ctx, createTaskQuery, args...); err != nil {
+	if _, err := r.client.Exec(createTaskQuery, args...); err != nil {
 		errCreating := contracts.FailCreatingTask
 
 		if err, ok := err.(*mysql.MySQLError); ok {
@@ -99,7 +97,6 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (error error) {
 		return nil
 	}
 
-	ctx := context.Background()
 	var args []interface{}
 	for _, task := range tasks {
 		args = append(args, task.Id)
@@ -108,7 +105,7 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (error error) {
 	deletingTaskQuery := fmt.Sprintf("DELETE FROM task WHERE uuid IN (?%s)",
 		strings.Repeat(",?", len(tasks)-1))
 
-	if _, err := r.client.ExecContext(ctx, deletingTaskQuery, args...); err != nil {
+	if _, err := r.client.Exec(deletingTaskQuery, args...); err != nil {
 		error = contracts.FailDeletingTask
 
 		if err, ok := err.(*mysql.MySQLError); ok {
@@ -139,15 +136,13 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (error error) {
 }
 
 func (r *mysqlRepository) deleteEmptyCollections() error {
-	ctx := context.Background()
-
 	findCollectionsQuery := `SELECT c.id
 		FROM collection c WHERE c.exec_time < unix_timestamp()-5
 		AND NOT EXISTS(
 			SELECT t.uuid FROM task t WHERE t.collection_id = c.id
 		)`
 
-	rows, errFinding := r.client.QueryContext(ctx, findCollectionsQuery)
+	rows, errFinding := r.client.Query(findCollectionsQuery)
 	if errFinding != nil {
 		return errors.Wrap(errFinding, "deleting empty collections is fail")
 	}
@@ -176,7 +171,7 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 		deleteCollectionsQuery := fmt.Sprintf("DELETE FROM collection c WHERE id IN(?%s)",
 			strings.Repeat(",?", len(ids)-1))
 
-		if _, err := r.client.ExecContext(ctx, deleteCollectionsQuery, ids...); err != nil {
+		if _, err := r.client.Exec(deleteCollectionsQuery, ids...); err != nil {
 			return errors.Wrap(err, "clearing collections was fail")
 		}
 
@@ -187,14 +182,12 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 }
 
 func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks domain.Tasks, error error) {
-	ctx := context.Background()
-
-	const queryFindBySecToExecTime = `SELECT t.uuid, c.exec_time
+	queryFindBySecToExecTime := `SELECT t.uuid, c.exec_time
 		FROM task t
 		INNER JOIN collection c on t.collection_id = c.id
 		WHERE t.collection_id = ?`
 
-	rows, errFinding := r.client.QueryContext(ctx, queryFindBySecToExecTime, collectionId)
+	rows, errFinding := r.client.Query(queryFindBySecToExecTime, collectionId)
 	if errFinding != nil {
 		error = contracts.FailGettingTasks
 		r.eer.New(contracts.LevelError, errFinding.Error(), map[string]interface{}{"collection id": collectionId})
