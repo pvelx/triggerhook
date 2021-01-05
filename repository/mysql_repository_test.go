@@ -8,7 +8,7 @@ import (
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"github.com/pvelx/triggerHook/services"
-	uuid "github.com/satori/go.uuid"
+	"github.com/pvelx/triggerHook/util"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"log"
@@ -594,7 +594,7 @@ func TestCreate(t *testing.T) {
 	----------------------------------------------------
 */
 func getTaskInstance(execTime int64) domain.Task {
-	return domain.Task{Id: uuid.NewV4().String(), ExecTime: execTime}
+	return domain.Task{Id: util.NewId(), ExecTime: execTime}
 }
 
 func getCountTasksByParamsInDb(isTaken bool, execTime int64) int {

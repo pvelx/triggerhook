@@ -3,7 +3,7 @@ package services
 import (
 	"fmt"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/satori/go.uuid"
+	"github.com/pvelx/triggerHook/util"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -12,7 +12,7 @@ import (
 func taskBunch(execTime int64, count int) []domain.Task {
 	var taskBunch []domain.Task
 	for i := 0; i < count; i++ {
-		taskBunch = append(taskBunch, domain.Task{Id: uuid.NewV4().String(), ExecTime: execTime})
+		taskBunch = append(taskBunch, domain.Task{Id: util.NewId(), ExecTime: execTime})
 	}
 	return taskBunch
 }

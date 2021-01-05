@@ -36,6 +36,7 @@ type TaskManagerInterface interface {
 var (
 	TmErrorCreatingTasks       = errors.New("cannot create task")
 	TmErrorUuidIsNotCorrect    = errors.New("uuid of the task is not correct")
+	TmErrorTaskExist           = errors.New("task with this uuid already exist")
 	TmErrorConfirmationTasks   = errors.New("cannot confirm execution of tasks")
 	TmErrorGetTasks            = errors.New("cannot get any tasks")
 	TmErrorCollectionsNotFound = errors.New("collections not found")

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/pvelx/triggerHook/domain"
 	"github.com/pvelx/triggerHook/services"
-	uuid "github.com/satori/go.uuid"
+	"github.com/pvelx/triggerHook/util"
 	"log"
 	"sync"
 	"testing"
@@ -41,9 +41,8 @@ func benchmarkDelete(countTaskToDeleteAtOnce int, b *testing.B) {
 			ExecTime: time.Now().Unix() - 10,
 		})
 		for t := 1; t <= countTaskInCollection; t++ {
-			id := uuid.NewV4().String()
 			tasks = append(tasks, task{
-				Id:           id,
+				Id:           util.NewId(),
 				CollectionId: int64(c),
 			})
 		}
@@ -94,7 +93,7 @@ func BenchmarkCreate(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			err := repository.Create(domain.Task{
-				Id:       uuid.NewV4().String(),
+				Id:       util.NewId(),
 				ExecTime: time.Now().Unix(),
 			}, false)
 			if err != nil {

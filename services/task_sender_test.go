@@ -2,7 +2,7 @@ package services
 
 import (
 	"github.com/pvelx/triggerHook/domain"
-	uuid "github.com/satori/go.uuid"
+	"github.com/pvelx/triggerHook/util"
 	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
@@ -11,7 +11,7 @@ import (
 
 func createReadyToSendTask(chTaskReadyToSend chan domain.Task, count int) {
 	for i := 0; i < count; i++ {
-		chTaskReadyToSend <- domain.Task{Id: uuid.NewV4().String(), ExecTime: time.Now().Unix()}
+		chTaskReadyToSend <- domain.Task{Id: util.NewId(), ExecTime: time.Now().Unix()}
 	}
 }
 

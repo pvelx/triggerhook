@@ -4,7 +4,7 @@ import (
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"github.com/pvelx/triggerHook/repository"
-	"github.com/satori/go.uuid"
+	"github.com/pvelx/triggerHook/util"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -74,7 +74,7 @@ func TestTaskManager_Delete(t *testing.T) {
 
 			tm := NewTaskManager(r, eeh)
 
-			result := tm.Delete(uuid.NewV4().String())
+			result := tm.Delete(util.NewId())
 
 			assert.Equal(t, test.expectedError, result, "error from task manager is not correct")
 

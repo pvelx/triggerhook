@@ -6,13 +6,13 @@ import (
 	"github.com/pvelx/triggerHook/domain"
 	"github.com/pvelx/triggerHook/repository"
 	"github.com/pvelx/triggerHook/services"
-	uuid "github.com/satori/go.uuid"
+	"github.com/pvelx/triggerHook/util"
 )
 
 var appInstanceId string
 
 func init() {
-	appInstanceId = uuid.NewV4().String()
+	appInstanceId = util.NewId()
 }
 
 func Default(client *sql.DB) contracts.TasksDeferredInterface {

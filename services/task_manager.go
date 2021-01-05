@@ -3,7 +3,7 @@ package services
 import (
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/satori/go.uuid"
+	"github.com/pvelx/triggerHook/util"
 	"time"
 )
 
@@ -33,17 +33,24 @@ func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
 	}
 
 	if task.Id == "" {
-		task.Id = uuid.NewV4().String()
-	} else if _, errUuid := uuid.FromString(task.Id); errUuid != nil {
+		task.Id = util.NewId()
+
+	} else if !util.IsIdValid(task.Id) {
 		return contracts.TmErrorUuidIsNotCorrect
 	}
 
-	errCreating := s.retry(func() error {
+	err := s.retry(func() error {
 		return s.repository.Create(*task, isTaken)
 	}, contracts.Deadlock)
 
-	if errCreating != nil {
-		s.eeh.New(contracts.LevelError, errCreating.Error(), map[string]interface{}{
+	if err == contracts.TaskExist {
+		s.eeh.New(contracts.LevelDebug, err.Error(), map[string]interface{}{
+			"task": task,
+		})
+
+		return contracts.TmErrorTaskExist
+	} else if err != nil {
+		s.eeh.New(contracts.LevelError, err.Error(), map[string]interface{}{
 			"task": task,
 		})
 

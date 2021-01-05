@@ -5,7 +5,7 @@ import (
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"github.com/pvelx/triggerHook/repository"
-	uuid "github.com/satori/go.uuid"
+	"github.com/pvelx/triggerHook/util"
 	"github.com/stretchr/testify/assert"
 	"sync/atomic"
 	"testing"
@@ -26,13 +26,13 @@ func TestTaskAdding(t *testing.T) {
 		task            domain.Task
 		isTakenExpected bool
 	}{
-		{domain.Task{Id: uuid.NewV4().String(), ExecTime: now - 10}, true},
-		{domain.Task{Id: uuid.NewV4().String(), ExecTime: now - 1}, true},
-		{domain.Task{Id: uuid.NewV4().String(), ExecTime: now + 0}, true},
-		{domain.Task{Id: uuid.NewV4().String(), ExecTime: now + 1}, true},
-		{domain.Task{Id: uuid.NewV4().String(), ExecTime: now + 9}, true},
-		{domain.Task{Id: uuid.NewV4().String(), ExecTime: now + 10}, false},
-		{domain.Task{Id: uuid.NewV4().String(), ExecTime: now + 11}, false},
+		{domain.Task{Id: util.NewId(), ExecTime: now - 10}, true},
+		{domain.Task{Id: util.NewId(), ExecTime: now - 1}, true},
+		{domain.Task{Id: util.NewId(), ExecTime: now + 0}, true},
+		{domain.Task{Id: util.NewId(), ExecTime: now + 1}, true},
+		{domain.Task{Id: util.NewId(), ExecTime: now + 9}, true},
+		{domain.Task{Id: util.NewId(), ExecTime: now + 10}, false},
+		{domain.Task{Id: util.NewId(), ExecTime: now + 11}, false},
 	}
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
