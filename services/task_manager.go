@@ -27,7 +27,7 @@ type taskManager struct {
 	timeGapBetweenRetry time.Duration
 }
 
-func (s *taskManager) Create(task domain.Task, isTaken bool) error {
+func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
 	if now := time.Now().Unix(); task.ExecTime < now {
 		task.ExecTime = now
 	}
@@ -39,7 +39,7 @@ func (s *taskManager) Create(task domain.Task, isTaken bool) error {
 	}
 
 	errCreating := s.retry(func() error {
-		return s.repository.Create(task, isTaken)
+		return s.repository.Create(*task, isTaken)
 	}, contracts.Deadlock)
 
 	if errCreating != nil {
@@ -53,15 +53,15 @@ func (s *taskManager) Create(task domain.Task, isTaken bool) error {
 	return nil
 }
 
-func (s *taskManager) Delete(task domain.Task) (err error) {
+func (s *taskManager) Delete(taskId string) (err error) {
 
 	errDeleting := s.retry(func() error {
-		return s.repository.Delete([]domain.Task{task})
+		return s.repository.Delete([]domain.Task{{Id: taskId}})
 	}, contracts.Deadlock)
 
 	if errDeleting != nil {
 		s.eeh.New(contracts.LevelError, errDeleting.Error(), map[string]interface{}{
-			"task": task,
+			"taskId": taskId,
 		})
 		err = contracts.TmErrorDeletingTask
 	}

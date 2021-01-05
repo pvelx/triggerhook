@@ -140,13 +140,13 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 			<-startWorkers
 
 			for {
-				tasks, isEnd, err := result.Next()
+				tasks, err := result.Next()
 				if err != nil {
-					panic("Cannot get tasks for doing")
-					return
-				}
-				if isEnd {
-					break
+					if err == contracts.NoCollections {
+						break
+					} else {
+						log.Fatal(err, "Getting next part is fail")
+					}
 				}
 
 				t.Log(fmt.Sprintf(
@@ -241,12 +241,13 @@ func TestParallel(t *testing.T) {
 			gettingWorkerNumber := 3
 			for w := 0; w < gettingWorkerNumber; w++ {
 				for {
-					collectionTasks, isEnd, errNext := collections.Next()
+					collectionTasks, errNext := collections.Next()
 					if errNext != nil {
-						log.Fatal(errNext, "Getting next part is fail")
-					}
-					if isEnd {
-						break
+						if errNext == contracts.NoCollections {
+							break
+						} else {
+							log.Fatal(errNext, "Getting next part is fail")
+						}
 					}
 					for _, task := range collectionTasks {
 						tasks <- task
@@ -327,12 +328,13 @@ func TestFindBySecToExecTime(t *testing.T) {
 	actualCollectionCount := 0
 
 	for {
-		tasks, isEnd, errNext := collections.Next()
+		tasks, errNext := collections.Next()
 		if errNext != nil {
-			log.Fatal(errNext, "Getting next part is fail")
-		}
-		if isEnd {
-			break
+			if errNext == contracts.NoCollections {
+				break
+			} else {
+				log.Fatal(errNext, "Getting next part is fail")
+			}
 		}
 
 		for _, task := range tasks {

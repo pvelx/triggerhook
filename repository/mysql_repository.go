@@ -481,14 +481,17 @@ func (c *Collections) takeCollectionId() (id int64, isEnd bool) {
 	return id, false
 }
 
-func (c *Collections) Next() (tasks []domain.Task, isEnd bool, error error) {
-	var id int64
-	id, isEnd = c.takeCollectionId()
+func (c *Collections) Next() ([]domain.Task, error) {
+
+	id, isEnd := c.takeCollectionId()
 	if isEnd {
-		return
+		return nil, contracts.NoCollections
 	}
 
-	tasks, error = c.r.getTasksByCollection(id)
+	tasks, err := c.r.getTasksByCollection(id)
+	if err != nil {
+		return nil, err
+	}
 
-	return
+	return tasks, nil
 }

@@ -1,7 +1,6 @@
 package services
 
 import (
-	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"sync"
@@ -41,7 +40,7 @@ func (s *preloadingTaskService) GetPreloadedChan() <-chan domain.Task {
 	return s.chPreloadedTask
 }
 
-func (s *preloadingTaskService) AddNewTask(task domain.Task) error {
+func (s *preloadingTaskService) AddNewTask(task *domain.Task) error {
 	relativeTimeToExec := time.Duration(task.ExecTime-time.Now().Unix()) * time.Second
 	isTaken := s.timePreload*time.Duration(s.coefTimePreloadOfNewTask) > relativeTimeToExec
 
@@ -50,7 +49,7 @@ func (s *preloadingTaskService) AddNewTask(task domain.Task) error {
 	}
 
 	if isTaken {
-		s.chPreloadedTask <- task
+		s.chPreloadedTask <- *task
 	}
 
 	return nil
@@ -61,8 +60,9 @@ func (s *preloadingTaskService) Preload() {
 		result, err := s.taskManager.GetTasksToComplete(s.timePreload)
 		switch {
 		case err == contracts.TmErrorCollectionsNotFound:
-			s.eh.New(contracts.LevelDebug, fmt.Sprintf("I go to sleep because I don't get any tasks"), nil)
+			s.eh.New(contracts.LevelDebug, "I go to sleep because I don't get any tasks", nil)
 			time.Sleep(s.timePreload)
+
 			continue
 		case err != nil:
 			/*
@@ -83,31 +83,33 @@ func (s *preloadingTaskService) Preload() {
 }
 
 func (s *preloadingTaskService) getBunchOfTask(wg *sync.WaitGroup, result contracts.CollectionsInterface, worker int) {
+	defer wg.Done()
 	for {
-		tasks, isEnd, err := result.Next()
-		s.eh.New(contracts.LevelDebug, fmt.Sprintf("preloaded tasks"), map[string]interface{}{
+		tasks, err := result.Next()
+		if err != nil {
+			if err == contracts.NoCollections {
+				s.eh.New(contracts.LevelDebug, "end", map[string]interface{}{
+					"worker": worker,
+				})
+				break
+			} else {
+				/*
+					Stop application
+				*/
+				s.eh.New(contracts.LevelFatal, "cannot get tasks for doing", map[string]interface{}{
+					"worker": worker,
+				})
+				return
+			}
+		}
+
+		s.eh.New(contracts.LevelDebug, "preloaded tasks", map[string]interface{}{
 			"tasks count": len(tasks),
 			"worker":      worker,
 		})
-		if err != nil {
-			s.eh.New(contracts.LevelFatal, fmt.Sprintf("cannot get tasks for doing"), map[string]interface{}{
-				"worker": worker,
-			})
-			return
-		}
-		if isEnd {
-			s.eh.New(contracts.LevelDebug, fmt.Sprintf("end"), map[string]interface{}{
-				"worker": worker,
-			})
-			break
-		}
-		if len(tasks) == 0 {
-			continue
-		}
 
 		for _, task := range tasks {
 			s.chPreloadedTask <- task
 		}
 	}
-	wg.Done()
 }

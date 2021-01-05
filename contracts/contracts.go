@@ -27,8 +27,8 @@ type TaskSenderInterface interface {
 }
 
 type TaskManagerInterface interface {
-	Create(task domain.Task, isTaken bool) error
-	Delete(task domain.Task) error
+	Create(task *domain.Task, isTaken bool) error
+	Delete(taskId string) error
 	GetTasksToComplete(preloadingTimeRange time.Duration) (CollectionsInterface, error)
 	ConfirmExecution(task []domain.Task) error
 }
@@ -43,7 +43,7 @@ var (
 )
 
 type CollectionsInterface interface {
-	Next() (tasks []domain.Task, isEnd bool, err error)
+	Next() (tasks []domain.Task, err error)
 }
 
 type RepositoryInterface interface {
@@ -62,13 +62,14 @@ var (
 	FailGettingTasks = errors.New("getting the tasks were fail")
 	FailFindingTasks = errors.New("finding the tasks were fail")
 	NoTasksFound     = errors.New("no tasks found")
+	NoCollections    = errors.New("collections are over")
 	TaskExist        = errors.New("task with the uuid already exist")
 	Deadlock         = errors.New("deadlock, please retry")
 	FailSchemaSetup  = errors.New("schema setup failed")
 )
 
 type PreloadingTaskServiceInterface interface {
-	AddNewTask(task domain.Task) error
+	AddNewTask(task *domain.Task) error
 	GetPreloadedChan() <-chan domain.Task
 	Preload()
 }
@@ -114,8 +115,8 @@ type EventErrorHandlerInterface interface {
 }
 
 type TasksDeferredInterface interface {
-	Create(task domain.Task) error
-	Delete(task domain.Task) (bool, error)
+	Create(task *domain.Task) error
+	Delete(taskId string) error
 
 	//Setting the function with the desired message sending method (for example, RabbitMQ)
 	//YOU SHOULD TAKE CARE HANDLE EXCEPTIONS WHILE SEND IN THIS FUNCTION

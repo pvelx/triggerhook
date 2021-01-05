@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/repository"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"sync/atomic"
@@ -13,7 +14,7 @@ import (
 
 func TestTaskAdding(t *testing.T) {
 	var isTakenActual bool
-	taskManagerMock := &taskManagerMock{createMock: func(task domain.Task, isTaken bool) error {
+	taskManagerMock := &taskManagerMock{createMock: func(task *domain.Task, isTaken bool) error {
 		isTakenActual = isTaken
 		return nil
 	}}
@@ -36,7 +37,7 @@ func TestTaskAdding(t *testing.T) {
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
 			chPreloadedTask := preloadingTaskService.GetPreloadedChan()
-			if err := preloadingTaskService.AddNewTask(tt.task); err != nil {
+			if err := preloadingTaskService.AddNewTask(&tt.task); err != nil {
 				t.Fatal(err)
 			}
 			assert.Equal(t, tt.isTakenExpected, isTakenActual, "The task must be taken")
@@ -106,7 +107,7 @@ func TestMainFlow(t *testing.T) {
 				collections := data[currentFinding].collections
 
 				var globalCurrentCollection int32 = 0
-				return &collectionsMock{nextMock: func() (tasks []domain.Task, isEnd bool, err error) {
+				return &repository.CollectionsMock{NextMock: func() (tasks []domain.Task, err error) {
 
 					currentCollection := atomic.LoadInt32(&globalCurrentCollection)
 					if len(collections) > int(currentCollection) {
@@ -120,13 +121,13 @@ func TestMainFlow(t *testing.T) {
 						}
 						time.Sleep(collection.Duration)
 
-						return tasks, false, nil
+						return tasks, nil
 					}
 
 					/*
 						Collections of tasks were ended
 					*/
-					return nil, true, nil
+					return nil, contracts.NoCollections
 				}}, nil
 			}
 

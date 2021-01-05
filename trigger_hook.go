@@ -60,16 +60,16 @@ func (s *triggerHook) SetErrorHandler(level contracts.Level, externalErrorHandle
 	s.eventErrorHandler.SetErrorHandler(level, externalErrorHandler)
 }
 
-func (s *triggerHook) Delete(task domain.Task) (bool, error) {
-	if err := s.taskManager.Delete(task); err != nil {
-		return false, err
+func (s *triggerHook) Delete(taskId string) error {
+	if err := s.taskManager.Delete(taskId); err != nil {
+		return err
 	}
-	s.waitingTaskService.CancelIfExist(task.Id)
+	s.waitingTaskService.CancelIfExist(taskId)
 
-	return true, nil
+	return nil
 }
 
-func (s *triggerHook) Create(task domain.Task) error {
+func (s *triggerHook) Create(task *domain.Task) error {
 	return s.preloadingTaskService.AddNewTask(task)
 }
 

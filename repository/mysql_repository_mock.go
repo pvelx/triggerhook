@@ -36,3 +36,12 @@ func (r *RepositoryMock) FindBySecToExecTime(preloadingTimeRange time.Duration) 
 ) {
 	return r.FindBySecToExecTimeMock(preloadingTimeRange)
 }
+
+type CollectionsMock struct {
+	contracts.CollectionsInterface
+	NextMock func() (tasks []domain.Task, err error)
+}
+
+func (c *CollectionsMock) Next() (tasks []domain.Task, err error) {
+	return c.NextMock()
+}

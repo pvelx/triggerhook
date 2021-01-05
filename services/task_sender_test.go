@@ -34,7 +34,7 @@ func TestTaskSender(t *testing.T) {
 		return nil
 	}}
 
-	service := NewTaskSender(taskManagerMock, chTaskReadyToSend, nil)
+	service := NewTaskSender(taskManagerMock, chTaskReadyToSend, nil, &ErrorHandlerMock{})
 	service.SetTransport(func(task domain.Task) {})
 
 	go service.Send()

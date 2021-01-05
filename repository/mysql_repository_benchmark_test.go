@@ -3,6 +3,7 @@ package repository
 import (
 	"fmt"
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/services"
 	uuid "github.com/satori/go.uuid"
 	"log"
 	"sync"
@@ -57,7 +58,7 @@ func benchmarkDelete(countTaskToDeleteAtOnce int, b *testing.B) {
 	}
 
 	upFixtures(collections, tasks)
-	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{
+	repository := NewRepository(db, appInstanceId, &services.ErrorHandlerMock{}, &Options{
 		1000,
 		10})
 
@@ -84,7 +85,7 @@ func benchmarkDelete(countTaskToDeleteAtOnce int, b *testing.B) {
 
 func BenchmarkCreate(b *testing.B) {
 	clear()
-	repository := NewRepository(db, appInstanceId, ErrorHandler{}, &Options{maxCountTasksInCollection: 1000})
+	repository := NewRepository(db, appInstanceId, &services.ErrorHandlerMock{}, &Options{maxCountTasksInCollection: 1000})
 
 	b.ReportAllocs()
 	b.ResetTimer()

@@ -101,7 +101,7 @@ func TestOne(t *testing.T) {
 	for r := 0; r < 10; r++ {
 		go func() {
 			for j := 0; j < 1000000; j++ {
-				task := domain.Task{ExecTime: time.Now().Add(time.Duration(rand.Intn(300)) * time.Second).Unix()}
+				task := &domain.Task{ExecTime: time.Now().Add(time.Duration(rand.Intn(30)) * time.Second).Unix()}
 				triggerHook.Create(task)
 				f++
 			}
