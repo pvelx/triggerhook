@@ -82,19 +82,19 @@ func (eeh *EventErrorHandler) SetErrorHandler(level contracts.Level, eventHandle
 }
 
 func (eeh *EventErrorHandler) Listen() error {
-	for {
-		select {
-		case event := <-eeh.chEvent:
-			eventHandler, ok := eeh.eventHandlers[event.Level]
-			if !ok {
-				return errors.New(fmt.Sprintf("event handler for level:%d must be defined", event.Level))
-			}
+	for event := range eeh.chEvent {
 
-			eventHandler(event)
+		eventHandler, ok := eeh.eventHandlers[event.Level]
+		if !ok {
+			return errors.New(fmt.Sprintf("event handler for level:%d must be defined", event.Level))
+		}
 
-			if event.Level == contracts.LevelFatal {
-				return errors.New(event.EventMessage)
-			}
+		eventHandler(event)
+
+		if event.Level == contracts.LevelFatal {
+			return errors.New(event.EventMessage)
 		}
 	}
+
+	panic("channel of error handler was closed")
 }

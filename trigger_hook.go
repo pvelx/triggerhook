@@ -16,7 +16,7 @@ func init() {
 }
 
 func Default(client *sql.DB) contracts.TasksDeferredInterface {
-	eventErrorHandler := services.NewEventErrorHandler()
+	eventErrorHandler := services.NewEventErrorHandler(false)
 
 	repo := repository.NewRepository(client, appInstanceId, eventErrorHandler, nil)
 	if err := repo.Up(); err != nil {
@@ -32,6 +32,7 @@ func Default(client *sql.DB) contracts.TasksDeferredInterface {
 		taskManager,
 		waitingTaskService.GetReadyToSendChan(),
 		nil,
+		eventErrorHandler,
 	)
 
 	return &triggerHook{
@@ -55,8 +56,8 @@ func (s *triggerHook) SetTransport(externalSender func(task domain.Task)) {
 	s.senderService.SetTransport(externalSender)
 }
 
-func (s *triggerHook) SetErrorHandler(externalErrorHandler func(event contracts.EventError)) {
-	s.eventErrorHandler.SetErrorHandler(externalErrorHandler)
+func (s *triggerHook) SetErrorHandler(level contracts.Level, externalErrorHandler func(event contracts.EventError)) {
+	s.eventErrorHandler.SetErrorHandler(level, externalErrorHandler)
 }
 
 func (s *triggerHook) Delete(task domain.Task) (bool, error) {

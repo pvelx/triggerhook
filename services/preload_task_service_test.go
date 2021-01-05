@@ -137,7 +137,7 @@ func TestMainFlow(t *testing.T) {
 		},
 	}
 
-	preloadingTaskService := NewPreloadingTaskService(taskManagerMock, nil)
+	preloadingTaskService := NewPreloadingTaskService(taskManagerMock, &ErrorHandlerMock{})
 
 	chPreloadedTask := preloadingTaskService.GetPreloadedChan()
 	go preloadingTaskService.Preload()

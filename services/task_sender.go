@@ -19,6 +19,7 @@ func NewTaskSender(
 	taskManager contracts.TaskManagerInterface,
 	chTasksReadyToSend <-chan domain.Task,
 	options *Options,
+	eeh contracts.EventErrorHandlerInterface,
 ) contracts.TaskSenderInterface {
 	if options == nil {
 		options = &Options{
@@ -34,6 +35,7 @@ func NewTaskSender(
 		taskManager:        taskManager,
 		chTasksToConfirm:   make(chan domain.Task, options.chTasksToConfirmLen),
 		chTasksReadyToSend: chTasksReadyToSend,
+		eeh:                eeh,
 		options:            options,
 	}
 }
@@ -44,6 +46,7 @@ type taskSender struct {
 	chTasksReadyToSend      <-chan domain.Task
 	chTasksToConfirm        chan domain.Task
 	taskManager             contracts.TaskManagerInterface
+	eeh                     contracts.EventErrorHandlerInterface
 	options                 *Options
 }
 
@@ -70,9 +73,9 @@ func (s *taskSender) confirmBatch(batchTasksCh chan []domain.Task) {
 		go func() {
 			for batch := range batchTasksCh {
 				if err := s.taskManager.ConfirmExecution(batch); err != nil {
-					panic(err)
+					s.eeh.New(contracts.LevelFatal, err.Error(), nil)
 				}
-				fmt.Println(fmt.Sprintf("DEBUG TaskSender confirmBatch: confirmed %d task", len(batch)))
+				s.eeh.New(contracts.LevelDebug, fmt.Sprintf("confirmed %d tasks", len(batch)), nil)
 			}
 		}()
 	}

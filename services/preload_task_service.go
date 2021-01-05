@@ -60,7 +60,7 @@ func (s *preloadingTaskService) Preload() {
 	for {
 		result, err := s.taskManager.GetTasksToComplete(s.timePreload)
 		switch {
-		case err == contracts.NoTasksFound:
+		case err == contracts.TmErrorCollectionsNotFound:
 			s.eh.New(contracts.LevelDebug, fmt.Sprintf("I go to sleep because I don't get any tasks"), nil)
 			time.Sleep(s.timePreload)
 			continue
@@ -74,33 +74,40 @@ func (s *preloadingTaskService) Preload() {
 		}
 
 		var wg sync.WaitGroup
-		wg.Add(s.workersCount)
 		for worker := 0; worker < s.workersCount; worker++ {
-			go func() {
-				for {
-					tasks, isEnd, err := result.Next()
-					s.eh.New(contracts.LevelDebug, fmt.Sprintf("preloaded tasks"), map[string]interface{}{
-						"tasks count": len(tasks),
-					})
-					if err != nil {
-						s.eh.New(contracts.LevelFatal, fmt.Sprintf("cannot get tasks for doing"), nil)
-						return
-					}
-					if isEnd {
-						s.eh.New(contracts.LevelDebug, fmt.Sprintf("end"), nil)
-						break
-					}
-					if len(tasks) == 0 {
-						continue
-					}
-
-					for _, task := range tasks {
-						s.chPreloadedTask <- task
-					}
-				}
-				wg.Done()
-			}()
+			wg.Add(1)
+			go s.getBunchOfTask(&wg, result, worker)
 		}
 		wg.Wait()
 	}
+}
+
+func (s *preloadingTaskService) getBunchOfTask(wg *sync.WaitGroup, result contracts.CollectionsInterface, worker int) {
+	for {
+		tasks, isEnd, err := result.Next()
+		s.eh.New(contracts.LevelDebug, fmt.Sprintf("preloaded tasks"), map[string]interface{}{
+			"tasks count": len(tasks),
+			"worker":      worker,
+		})
+		if err != nil {
+			s.eh.New(contracts.LevelFatal, fmt.Sprintf("cannot get tasks for doing"), map[string]interface{}{
+				"worker": worker,
+			})
+			return
+		}
+		if isEnd {
+			s.eh.New(contracts.LevelDebug, fmt.Sprintf("end"), map[string]interface{}{
+				"worker": worker,
+			})
+			break
+		}
+		if len(tasks) == 0 {
+			continue
+		}
+
+		for _, task := range tasks {
+			s.chPreloadedTask <- task
+		}
+	}
+	wg.Done()
 }

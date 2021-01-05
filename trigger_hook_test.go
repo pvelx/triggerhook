@@ -5,7 +5,6 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pvelx/triggerHook/clients"
-	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"log"
 	"math/rand"
@@ -96,9 +95,6 @@ func TestOne(t *testing.T) {
 	db = clients.NewMysqlClient("root", "secret", "127.0.0.1:3306", "test_db")
 	triggerHook := Default(db)
 
-	triggerHook.SetErrorHandler(func(eventError contracts.EventError) {
-		fmt.Println("error:", eventError)
-	})
 	rand.Seed(time.Now().UnixNano())
 
 	f := 0
@@ -106,15 +102,8 @@ func TestOne(t *testing.T) {
 		go func() {
 			for j := 0; j < 1000000; j++ {
 				task := domain.Task{ExecTime: time.Now().Add(time.Duration(rand.Intn(300)) * time.Second).Unix()}
-				err := triggerHook.Create(task)
-				if err != nil {
-					log.Fatal(err)
-				}
+				triggerHook.Create(task)
 				f++
-				if f == 1e+2 {
-					f = 0
-					//fmt.Println("created", task.Id)
-				}
 			}
 		}()
 	}

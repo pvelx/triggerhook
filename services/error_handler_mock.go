@@ -15,9 +15,13 @@ type ErrorHandlerMock struct {
 }
 
 func (tm *ErrorHandlerMock) SetErrorHandler(level contracts.Level, eventHandler func(event contracts.EventError)) {
-	tm.SetErrorHandlerMock(level, eventHandler)
+	if tm.SetErrorHandlerMock != nil {
+		tm.SetErrorHandlerMock(level, eventHandler)
+	}
 }
 
 func (tm *ErrorHandlerMock) New(level contracts.Level, eventMessage string, extra map[string]interface{}) {
-	tm.NewMock(level, eventMessage, extra)
+	if tm.NewMock != nil {
+		tm.NewMock(level, eventMessage, extra)
+	}
 }

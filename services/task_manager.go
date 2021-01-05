@@ -1,9 +1,9 @@
 package services
 
 import (
-	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/satori/go.uuid"
 	"time"
 )
 
@@ -27,9 +27,15 @@ type taskManager struct {
 	timeGapBetweenRetry time.Duration
 }
 
-func (s *taskManager) Create(task domain.Task, isTaken bool) (err error) {
+func (s *taskManager) Create(task domain.Task, isTaken bool) error {
 	if now := time.Now().Unix(); task.ExecTime < now {
 		task.ExecTime = now
+	}
+
+	if task.Id == "" {
+		task.Id = uuid.NewV4().String()
+	} else if _, errUuid := uuid.FromString(task.Id); errUuid != nil {
+		return contracts.TmErrorUuidIsNotCorrect
 	}
 
 	errCreating := s.retry(func() error {
@@ -40,10 +46,11 @@ func (s *taskManager) Create(task domain.Task, isTaken bool) (err error) {
 		s.eeh.New(contracts.LevelError, errCreating.Error(), map[string]interface{}{
 			"task": task,
 		})
-		err = contracts.TmErrorCreatingTasks
+
+		return contracts.TmErrorCreatingTasks
 	}
 
-	return
+	return nil
 }
 
 func (s *taskManager) Delete(task domain.Task) (err error) {
@@ -62,26 +69,25 @@ func (s *taskManager) Delete(task domain.Task) (err error) {
 	return
 }
 
-func (s *taskManager) GetTasksToComplete(preloadingTimeRange time.Duration) (
-	collections contracts.CollectionsInterface,
-	err error,
-) {
+func (s *taskManager) GetTasksToComplete(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
+	var collections contracts.CollectionsInterface
 	errFinding := s.retry(func() (err error) {
 		collections, err = s.repository.FindBySecToExecTime(preloadingTimeRange)
 		return
 	}, contracts.Deadlock)
 
-	if errFinding != nil {
+	switch {
+	case errFinding == contracts.NoTasksFound:
+		return nil, contracts.TmErrorCollectionsNotFound
+	case errFinding != nil:
 		s.eeh.New(contracts.LevelError, errFinding.Error(), nil)
-		err = contracts.TmErrorGetTasks
+		return collections, contracts.TmErrorGetTasks
 	}
 
-	fmt.Println(collections, err)
-
-	return
+	return collections, nil
 }
 
-func (s *taskManager) ConfirmExecution(task []domain.Task) (err error) {
+func (s *taskManager) ConfirmExecution(task []domain.Task) error {
 
 	errConfirm := s.retry(func() error {
 		return s.repository.Delete(task)
@@ -91,21 +97,19 @@ func (s *taskManager) ConfirmExecution(task []domain.Task) (err error) {
 		s.eeh.New(contracts.LevelError, errConfirm.Error(), map[string]interface{}{
 			"task": task,
 		})
-		err = contracts.TmErrorConfirmationTasks
+		return contracts.TmErrorConfirmationTasks
 	}
 
-	return
+	return nil
 }
 
 func (s *taskManager) retry(callback func() error, retryableErrors ...error) (err error) {
 	for try := 1; try <= s.maxRetry; try++ {
 		if err = callback(); err != nil {
-
-			s.eeh.New(contracts.LevelError, err.Error(), map[string]interface{}{
-				"try": try,
-			})
-
 			if contains(retryableErrors, err) {
+				s.eeh.New(contracts.LevelError, err.Error(), map[string]interface{}{
+					"try": try,
+				})
 				if try != s.maxRetry {
 					time.Sleep(s.timeGapBetweenRetry)
 				}

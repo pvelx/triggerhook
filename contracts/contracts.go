@@ -34,10 +34,12 @@ type TaskManagerInterface interface {
 }
 
 var (
-	TmErrorCreatingTasks     = errors.New("cannot confirm execution of tasks")
-	TmErrorConfirmationTasks = errors.New("cannot confirm execution of tasks")
-	TmErrorGetTasks          = errors.New("cannot get any tasks")
-	TmErrorDeletingTask      = errors.New("cannot delete task")
+	TmErrorCreatingTasks       = errors.New("cannot create task")
+	TmErrorUuidIsNotCorrect    = errors.New("uuid of the task is not correct")
+	TmErrorConfirmationTasks   = errors.New("cannot confirm execution of tasks")
+	TmErrorGetTasks            = errors.New("cannot get any tasks")
+	TmErrorCollectionsNotFound = errors.New("collections not found")
+	TmErrorDeletingTask        = errors.New("cannot delete task")
 )
 
 type CollectionsInterface interface {
@@ -120,7 +122,7 @@ type TasksDeferredInterface interface {
 	SetTransport(func(task domain.Task))
 
 	//Configure the function using the desired error handler (for example, file logger, Sentry or other)
-	SetErrorHandler(func(EventError))
+	SetErrorHandler(Level, func(EventError))
 
 	//LAUNCHER TRIGGER HOOK :) !!!
 	Run() error
