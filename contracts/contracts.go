@@ -115,6 +115,34 @@ type EventErrorHandlerInterface interface {
 	Listen() error
 }
 
+/*
+	Monitoring
+*/
+
+type MetricType int
+
+const (
+	Absolute MetricType = iota
+	Periodic
+)
+
+type SubscriptionInterface interface {
+	Close()
+}
+
+type MonitoringInterface interface {
+	/*
+		Init measurement
+	*/
+	Init(topic string, metricType MetricType)
+	Pub(topic string, measure int64) error
+	Sub(topic string, callback func(measure int64)) (SubscriptionInterface, error)
+	Run()
+}
+
+/*
+	Trigger hook interface
+*/
 type TasksDeferredInterface interface {
 	Create(task *domain.Task) error
 	Delete(taskId string) error
