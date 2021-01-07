@@ -208,20 +208,32 @@ type MonitoringInterface interface {
 	Run()
 }
 
-/*  --------------------------------------------------
-Trigger hook interface
+/*	--------------------------------------------------
+	Trigger hook interface
 */
 type TasksDeferredInterface interface {
 	Create(task *domain.Task) error
+
 	Delete(taskId string) error
 
-	//Setting the function with the desired message sending method (for example, RabbitMQ)
-	//YOU SHOULD TAKE CARE HANDLE EXCEPTIONS WHILE SEND IN THIS FUNCTION
+	/*
+		Setting the function with the desired message sending method (for example, RabbitMQ)
+		YOU SHOULD TAKE CARE HANDLE EXCEPTIONS WHILE SEND IN THIS FUNCTION
+	*/
 	SetTransport(func(task domain.Task))
 
-	//Configure the function using the desired error handler (for example, file logger, Sentry or other)
+	/*
+		Configure the function using the desired error handler (for example, file logger, Sentry or other)
+	*/
 	SetErrorHandler(Level, func(EventError))
 
-	//LAUNCHER TRIGGER HOOK :) !!!
+	/*
+		Subscribe to events of measure
+	*/
+	Sub(topic string, callback func(measurementEvent MeasurementEvent)) (SubscriptionInterface, error)
+
+	/*
+		LAUNCHER TRIGGER HOOK :) !!!
+	*/
 	Run() error
 }

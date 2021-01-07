@@ -78,6 +78,13 @@ func (s *triggerHook) SetErrorHandler(level contracts.Level, externalErrorHandle
 	s.eventErrorHandler.SetErrorHandler(level, externalErrorHandler)
 }
 
+func (s *triggerHook) Sub(topic string, callback func(measurementEvent contracts.MeasurementEvent)) (
+	contracts.SubscriptionInterface,
+	error,
+) {
+	return s.monitoringService.Sub(topic, callback)
+}
+
 func (s *triggerHook) Delete(taskId string) error {
 	return s.waitingTaskService.CancelIfExist(taskId)
 }
