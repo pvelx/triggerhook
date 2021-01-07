@@ -1,4 +1,4 @@
-package monitoring
+package monitoring_service
 
 import "sync/atomic"
 

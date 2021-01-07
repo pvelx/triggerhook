@@ -1,4 +1,4 @@
-package services
+package task_sender_service
 
 import (
 	"fmt"
@@ -15,11 +15,12 @@ type Options struct {
 	confirmationWorkersCount int
 }
 
-func NewTaskSender(
+func New(
 	taskManager contracts.TaskManagerInterface,
 	chTasksReadyToSend <-chan domain.Task,
 	options *Options,
 	eeh contracts.EventErrorHandlerInterface,
+	monitoring contracts.MonitoringInterface,
 ) contracts.TaskSenderInterface {
 	if options == nil {
 		options = &Options{
@@ -31,12 +32,17 @@ func NewTaskSender(
 		}
 	}
 
+	//if err := monitoring.Init("", contracts.ValueMetricType); err != nil {
+	//	panic(err)
+	//}
+
 	return &taskSender{
 		taskManager:        taskManager,
 		chTasksToConfirm:   make(chan domain.Task, options.chTasksToConfirmLen),
 		chTasksReadyToSend: chTasksReadyToSend,
 		eeh:                eeh,
 		options:            options,
+		monitoring:         monitoring,
 	}
 }
 
@@ -48,6 +54,7 @@ type taskSender struct {
 	taskManager             contracts.TaskManagerInterface
 	eeh                     contracts.EventErrorHandlerInterface
 	options                 *Options
+	monitoring              contracts.MonitoringInterface
 }
 
 func (s *taskSender) SetTransport(sendByExternalTransport func(task domain.Task)) {

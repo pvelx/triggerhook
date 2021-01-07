@@ -1,14 +1,8 @@
-package monitoring
+package monitoring_service
 
 import (
-	"errors"
 	"github.com/pvelx/triggerHook/contracts"
 	"time"
-)
-
-var (
-	NoTopic      = errors.New("such topic does not exist")
-	NoSubscribes = errors.New("subscribers of the topic do not exist")
 )
 
 type MetricInterface interface {
@@ -16,7 +10,7 @@ type MetricInterface interface {
 	Get() int64
 }
 
-func NewMonitoringService(periodMeasure time.Duration) contracts.MonitoringInterface {
+func New(periodMeasure time.Duration) contracts.MonitoringInterface {
 	return &Monitoring{
 		periodMeasure: periodMeasure,
 		metrics:       make(map[string]MetricInterface),
@@ -40,28 +34,34 @@ type Monitoring struct {
 	eventChCap    int
 }
 
-func (m *Monitoring) Init(topic string, calcType contracts.MetricType) {
+func (m *Monitoring) Init(topic string, calcType contracts.MetricType) error {
 	var metric MetricInterface
 
 	switch calcType {
-	case contracts.Velocity:
+	case contracts.VelocityMetricType:
 		metric = &VelocityMetric{}
-	case contracts.Value:
+	case contracts.ValueMetricType:
 		metric = &ValueMetric{}
 	}
 
+	if _, ok := m.metrics[topic]; ok {
+		return contracts.TopicExist
+	}
+
 	m.metrics[topic] = metric
+
+	return nil
 }
 
 func (m *Monitoring) Pub(topic string, measure int64) error {
 
 	if _, ok := m.subscriptions[topic]; !ok {
-		return NoSubscribes
+		return contracts.NoSubscribes
 	}
 
 	metric, ok := m.metrics[topic]
 	if !ok {
-		return NoTopic
+		return contracts.NoTopic
 	}
 
 	metric.Set(measure)
@@ -75,7 +75,7 @@ func (m *Monitoring) Sub(
 ) (contracts.SubscriptionInterface, error) {
 
 	if _, ok := m.metrics[topic]; !ok {
-		return nil, NoTopic
+		return nil, contracts.NoTopic
 	}
 
 	subscription := &Subscription{

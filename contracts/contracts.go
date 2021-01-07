@@ -162,12 +162,18 @@ const (
 	/*
 		Measures the value at regular intervals
 	*/
-	Value MetricType = iota
+	ValueMetricType MetricType = iota
 
 	/*
 		Measures the number of elements in a time period
 	*/
-	Velocity
+	VelocityMetricType
+)
+
+var (
+	NoTopic      = errors.New("such topic does not exist")
+	TopicExist   = errors.New("the topic exist")
+	NoSubscribes = errors.New("subscribers of the topic do not exist")
 )
 
 type SubscriptionInterface interface {
@@ -184,7 +190,7 @@ type MonitoringInterface interface {
 	/*
 		Init measurement
 	*/
-	Init(topic string, metricType MetricType)
+	Init(topic string, metricType MetricType) error
 
 	/*
 		Publishing measurement events

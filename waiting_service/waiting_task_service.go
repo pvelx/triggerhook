@@ -1,4 +1,4 @@
-package services
+package waiting_service
 
 import (
 	"github.com/pvelx/triggerHook/contracts"
@@ -9,13 +9,22 @@ import (
 	"time"
 )
 
-func NewWaitingTaskService(chPreloadedTasks <-chan domain.Task) contracts.WaitingTaskServiceInterface {
+func New(
+	chPreloadedTasks <-chan domain.Task,
+	monitoring contracts.MonitoringInterface,
+) contracts.WaitingTaskServiceInterface {
+
+	//if err := monitoring.Init("", contracts.ValueMetricType); err != nil {
+	//	panic(err)
+	//}
+
 	service := &waitingTaskService{
 		tasksWaitingList:   prioritized_task_list.NewHeapPrioritizedTaskList([]domain.Task{}),
 		chPreloadedTasks:   chPreloadedTasks,
 		chCanceledTasks:    make(chan string, 10000000),
 		chTasksReadyToSend: make(chan domain.Task, 10000000),
 		mu:                 &sync.Mutex{},
+		monitoring:         monitoring,
 	}
 
 	return service
@@ -27,6 +36,7 @@ type waitingTaskService struct {
 	chCanceledTasks    chan string
 	chTasksReadyToSend chan domain.Task
 	mu                 *sync.Mutex
+	monitoring         contracts.MonitoringInterface
 }
 
 func (s *waitingTaskService) GetReadyToSendChan() <-chan domain.Task {

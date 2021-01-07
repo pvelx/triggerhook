@@ -1,4 +1,4 @@
-package monitoring
+package monitoring_service
 
 type ValueMetric struct {
 	MetricInterface

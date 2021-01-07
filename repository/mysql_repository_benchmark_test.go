@@ -3,7 +3,7 @@ package repository
 import (
 	"fmt"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/services"
+	"github.com/pvelx/triggerHook/event_error_handler_service"
 	"github.com/pvelx/triggerHook/util"
 	"log"
 	"sync"
@@ -57,7 +57,7 @@ func benchmarkDelete(countTaskToDeleteAtOnce int, b *testing.B) {
 	}
 
 	upFixtures(collections, tasks)
-	repository := NewRepository(db, appInstanceId, &services.ErrorHandlerMock{}, &Options{
+	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, &Options{
 		1000,
 		10})
 
@@ -84,7 +84,7 @@ func benchmarkDelete(countTaskToDeleteAtOnce int, b *testing.B) {
 
 func BenchmarkCreate(b *testing.B) {
 	clear()
-	repository := NewRepository(db, appInstanceId, &services.ErrorHandlerMock{}, &Options{maxCountTasksInCollection: 1000})
+	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, &Options{maxCountTasksInCollection: 1000})
 
 	b.ReportAllocs()
 	b.ResetTimer()

@@ -1,7 +1,9 @@
-package services
+package task_sender_service
 
 import (
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/event_error_handler_service"
+	"github.com/pvelx/triggerHook/task_manager"
 	"github.com/pvelx/triggerHook/util"
 	"github.com/stretchr/testify/assert"
 	"sync"
@@ -20,7 +22,7 @@ func TestTaskSender(t *testing.T) {
 	expected := []int{400, 1000, 500, 1000, 1000, 1000, 300}
 
 	chTaskReadyToSend := make(chan domain.Task, 10000000)
-	taskManagerMock := &taskManagerMock{confirmExecutionMock: func(tasks []domain.Task) error {
+	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(tasks []domain.Task) error {
 		mu.Lock()
 		if len(expected) == 0 {
 			assert.Fail(t, "expected values ware end")
@@ -34,7 +36,7 @@ func TestTaskSender(t *testing.T) {
 		return nil
 	}}
 
-	service := NewTaskSender(taskManagerMock, chTaskReadyToSend, nil, &ErrorHandlerMock{})
+	service := New(taskManagerMock, chTaskReadyToSend, nil, &event_error_handler_service.ErrorHandlerMock{}, nil)
 	service.SetTransport(func(task domain.Task) {})
 
 	go service.Send()

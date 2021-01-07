@@ -1,4 +1,4 @@
-package services
+package task_manager
 
 import (
 	"github.com/pvelx/triggerHook/contracts"
@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func NewTaskManager(
+func New(
 	repository contracts.RepositoryInterface,
 	eeh contracts.EventErrorHandlerInterface,
 ) contracts.TaskManagerInterface {

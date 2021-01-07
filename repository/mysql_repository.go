@@ -29,8 +29,9 @@ type Options struct {
 	cleaningFrequency int32
 }
 
-func NewRepository(
-	client *sql.DB, appInstanceId string,
+func New(
+	client *sql.DB,
+	appInstanceId string,
 	eer contracts.EventErrorHandlerInterface,
 	options *Options,
 ) contracts.RepositoryInterface {

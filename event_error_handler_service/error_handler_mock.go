@@ -1,4 +1,4 @@
-package services
+package event_error_handler_service
 
 import (
 	"github.com/pvelx/triggerHook/contracts"

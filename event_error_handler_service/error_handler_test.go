@@ -1,4 +1,4 @@
-package services
+package event_error_handler_service
 
 import (
 	"errors"
@@ -43,7 +43,7 @@ func TestSendEvent(t *testing.T) {
 		},
 	}
 
-	eventErrorHandler := NewEventErrorHandler(true)
+	eventErrorHandler := New(true)
 	eventDebugCh := make(chan contracts.EventError, 1)
 	eventErrorCh := make(chan contracts.EventError, 1)
 	eventFatalCh := make(chan contracts.EventError, 1)

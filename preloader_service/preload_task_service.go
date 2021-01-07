@@ -1,4 +1,4 @@
-package services
+package preloader_service
 
 import (
 	"github.com/pvelx/triggerHook/contracts"
@@ -7,10 +7,16 @@ import (
 	"time"
 )
 
-func NewPreloadingTaskService(
+func New(
 	taskManager contracts.TaskManagerInterface,
 	eventErrorHandler contracts.EventErrorHandlerInterface,
+	monitoring contracts.MonitoringInterface,
 ) contracts.PreloadingTaskServiceInterface {
+
+	//if err := monitoring.Init("", contracts.ValueMetricType); err != nil {
+	//	panic(err)
+	//}
+
 	return &preloadingTaskService{
 		taskManager:     taskManager,
 		eh:              eventErrorHandler,
@@ -23,6 +29,7 @@ func NewPreloadingTaskService(
 		coefTimePreloadOfNewTask: 2,
 		taskNumberInOneSearch:    1000,
 		workersCount:             10,
+		monitoring:               monitoring,
 	}
 }
 
@@ -34,6 +41,7 @@ type preloadingTaskService struct {
 	coefTimePreloadOfNewTask int
 	taskNumberInOneSearch    int
 	workersCount             int
+	monitoring               contracts.MonitoringInterface
 }
 
 func (s *preloadingTaskService) GetPreloadedChan() <-chan domain.Task {

@@ -7,7 +7,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/services"
+	"github.com/pvelx/triggerHook/event_error_handler_service"
 	"github.com/pvelx/triggerHook/util"
 	"github.com/stretchr/testify/assert"
 	"io"
@@ -35,12 +35,8 @@ var (
 	maxConn  = 25
 	idleConn = 25
 
-	appInstanceId = uuid.NewV4().String()
+	appInstanceId = util.NewId()
 )
-
-type ErrorHandler struct {
-	contracts.EventErrorHandlerInterface
-}
 
 func TestMain(m *testing.M) {
 	// uses a sensible default on windows (tcp/http) and linux/osx (socket)
@@ -115,7 +111,7 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	clear()
 	loadFixtures("data_1")
 
-	repository := NewRepository(db, appInstanceId, &services.ErrorHandlerMock{}, nil)
+	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, nil)
 
 	expectedTaskCount := 35060
 	workersCount := 10
@@ -189,7 +185,7 @@ func TestParallel(t *testing.T) {
 	preloadingTimeRange := 5 * time.Second
 	maxCountTasksInCollection := 1000
 	var cleaningFrequency int32 = 1
-	repository := NewRepository(db, appInstanceId, &services.ErrorHandlerMock{}, &Options{maxCountTasksInCollection, cleaningFrequency})
+	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, &Options{maxCountTasksInCollection, cleaningFrequency})
 
 	input := []struct {
 		tasksCount       int
@@ -307,7 +303,7 @@ func TestFindBySecToExecTime(t *testing.T) {
 	clear()
 	loadFixtures("data_2")
 
-	repository := NewRepository(db, appInstanceId, &services.ErrorHandlerMock{}, nil)
+	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, nil)
 
 	expectedCountTaskOnIteration := []int{33, 981, 894, 128, 212, 174, 90, 148, 167, 108, 26, 966, 967, 0, 835, 140,
 		538, 127, 209, 356, 605, 354, 591, 0, 0, 0, 0, 0}
@@ -372,7 +368,7 @@ func TestCreateRaceCondition(t *testing.T) {
 	clear()
 
 	maxCountTasksInCollection := 100
-	repository := NewRepository(db, appInstanceId, &services.ErrorHandlerMock{}, &Options{
+	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, &Options{
 		maxCountTasksInCollection,
 		10,
 	})
@@ -449,7 +445,7 @@ func TestCreateRaceCondition(t *testing.T) {
 func TestDeleteBunch(t *testing.T) {
 	clear()
 	loadFixtures("data_3")
-	repository := NewRepository(db, appInstanceId, &services.ErrorHandlerMock{}, &Options{
+	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, &Options{
 		maxCountTasksInCollection: 1000,
 		cleaningFrequency:         1,
 	})
@@ -544,7 +540,7 @@ func TestDeleteBunch(t *testing.T) {
 func TestCreate(t *testing.T) {
 	clear()
 	maxCountTasksInCollection := 100
-	repository := NewRepository(db, appInstanceId, &services.ErrorHandlerMock{}, &Options{maxCountTasksInCollection, 10})
+	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, &Options{maxCountTasksInCollection, 10})
 
 	input := []struct {
 		tasksCount       int
@@ -690,7 +686,7 @@ func loadFixtures(testDir string) {
 	/*
 		collection fixture
 	*/
-	file, err := os.Open(fmt.Sprintf("../test_data/%s/collection.csv", testDir))
+	file, err := os.Open(fmt.Sprintf("./test_data/%s/collection.csv", testDir))
 	if err != nil {
 		panic(err)
 	}
@@ -729,7 +725,7 @@ func loadFixtures(testDir string) {
 	/*
 		task fixture
 	*/
-	taskFile, err := os.Open(fmt.Sprintf("../test_data/%s/task.csv", testDir))
+	taskFile, err := os.Open(fmt.Sprintf("./test_data/%s/task.csv", testDir))
 	if err != nil {
 		panic(err)
 	}

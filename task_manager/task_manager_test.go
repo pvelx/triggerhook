@@ -1,8 +1,9 @@
-package services
+package task_manager
 
 import (
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/event_error_handler_service"
 	"github.com/pvelx/triggerHook/repository"
 	"github.com/pvelx/triggerHook/util"
 	"github.com/stretchr/testify/assert"
@@ -66,13 +67,13 @@ func TestTaskManager_Delete(t *testing.T) {
 			}}
 
 			countCallNewOfEventHandler := 0
-			eeh := &ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
+			eeh := &event_error_handler_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
 				assert.Equal(t, contracts.LevelError, level, "must be LevelError")
 				assert.Equal(t, test.expectedEvents[countCallNewOfEventHandler], eventMessage, "must be LevelError")
 				countCallNewOfEventHandler++
 			}}
 
-			tm := NewTaskManager(r, eeh)
+			tm := New(r, eeh)
 
 			result := tm.Delete(util.NewId())
 
@@ -129,13 +130,13 @@ func TestTaskManager_Create(t *testing.T) {
 			}}
 
 			countCallNewOfEventHandler := 0
-			eeh := &ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
+			eeh := &event_error_handler_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
 				assert.Equal(t, contracts.LevelError, level, "must be LevelError")
 				assert.Equal(t, test.expectedEvents[countCallNewOfEventHandler], eventMessage, "must be LevelError")
 				countCallNewOfEventHandler++
 			}}
 
-			tm := NewTaskManager(r, eeh)
+			tm := New(r, eeh)
 
 			result := tm.Create(&domain.Task{}, true)
 
@@ -192,13 +193,13 @@ func TestTaskManager_ConfirmExecution(t *testing.T) {
 			}}
 
 			countCallNewOfEventHandler := 0
-			eeh := &ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
+			eeh := &event_error_handler_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
 				assert.Equal(t, contracts.LevelError, level, "must be LevelError")
 				assert.Equal(t, test.expectedEvents[countCallNewOfEventHandler], eventMessage, "must be LevelError")
 				countCallNewOfEventHandler++
 			}}
 
-			tm := NewTaskManager(r, eeh)
+			tm := New(r, eeh)
 
 			result := tm.ConfirmExecution([]domain.Task{{}, {}, {}})
 
@@ -278,13 +279,13 @@ func TestTaskManagerMock_GetTasksToComplete(t *testing.T) {
 			}}
 
 			countCallNewOfEventHandler := 0
-			eeh := &ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
+			eeh := &event_error_handler_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
 				assert.Equal(t, contracts.LevelError, level, "must be LevelError")
 				assert.Equal(t, test.expectedEvents[countCallNewOfEventHandler], eventMessage, "must be LevelError")
 				countCallNewOfEventHandler++
 			}}
 
-			tm := NewTaskManager(r, eeh)
+			tm := New(r, eeh)
 
 			result, err := tm.GetTasksToComplete(time.Second)
 

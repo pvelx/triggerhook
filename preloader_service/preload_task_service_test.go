@@ -1,10 +1,11 @@
-package services
+package preloader_service
 
 import (
 	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"github.com/pvelx/triggerHook/repository"
+	"github.com/pvelx/triggerHook/task_manager"
 	"github.com/pvelx/triggerHook/util"
 	"github.com/stretchr/testify/assert"
 	"sync/atomic"
@@ -14,12 +15,12 @@ import (
 
 func TestTaskAdding(t *testing.T) {
 	var isTakenActual bool
-	taskManagerMock := &taskManagerMock{createMock: func(task *domain.Task, isTaken bool) error {
+	taskManagerMock := &task_manager.TaskManagerMock{CreateMock: func(task *domain.Task, isTaken bool) error {
 		isTakenActual = isTaken
 		return nil
 	}}
 
-	preloadingTaskService := NewPreloadingTaskService(taskManagerMock, nil)
+	preloadingTaskService := New(taskManagerMock, nil, nil)
 
 	now := time.Now().Unix()
 	tests := []struct {
@@ -98,8 +99,8 @@ func TestMainFlow(t *testing.T) {
 
 	var globalCurrentFinding int32 = 0
 
-	taskManagerMock := &taskManagerMock{
-		getTasksToCompleteMock: func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
+	taskManagerMock := &task_manager.TaskManagerMock{
+		GetTasksToCompleteMock: func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
 
 			currentFinding := atomic.LoadInt32(&globalCurrentFinding)
 			if len(data) > int(currentFinding) {
@@ -138,7 +139,7 @@ func TestMainFlow(t *testing.T) {
 		},
 	}
 
-	preloadingTaskService := NewPreloadingTaskService(taskManagerMock, &ErrorHandlerMock{})
+	preloadingTaskService := New(taskManagerMock, &event_error_handler_service.ErrorHandlerMock{}, nil)
 
 	chPreloadedTask := preloadingTaskService.GetPreloadedChan()
 	go preloadingTaskService.Preload()

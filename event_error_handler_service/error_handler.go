@@ -1,4 +1,4 @@
-package services
+package event_error_handler_service
 
 import (
 	"errors"
@@ -18,7 +18,7 @@ var (
 	}
 )
 
-func NewEventErrorHandler(debug bool) contracts.EventErrorHandlerInterface {
+func New(debug bool) contracts.EventErrorHandlerInterface {
 	eventHandlers := make(map[contracts.Level]func(event contracts.EventError))
 	for level, format := range formats {
 		format := format

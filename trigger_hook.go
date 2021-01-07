@@ -4,9 +4,15 @@ import (
 	"database/sql"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/event_error_handler_service"
+	"github.com/pvelx/triggerHook/monitoring_service"
+	"github.com/pvelx/triggerHook/preloader_service"
 	"github.com/pvelx/triggerHook/repository"
-	"github.com/pvelx/triggerHook/services"
+	"github.com/pvelx/triggerHook/task_manager"
+	"github.com/pvelx/triggerHook/task_sender_service"
 	"github.com/pvelx/triggerHook/util"
+	"github.com/pvelx/triggerHook/waiting_service"
+	"time"
 )
 
 var appInstanceId string
@@ -16,23 +22,26 @@ func init() {
 }
 
 func Default(client *sql.DB) contracts.TasksDeferredInterface {
-	eventErrorHandler := services.NewEventErrorHandler(false)
+	eventErrorHandler := event_error_handler_service.New(false)
 
-	repo := repository.NewRepository(client, appInstanceId, eventErrorHandler, nil)
+	monitoringService := monitoring_service.New(5 * time.Second)
+
+	repo := repository.New(client, appInstanceId, eventErrorHandler, nil)
 	if err := repo.Up(); err != nil {
 		panic(err)
 	}
 
-	taskManager := services.NewTaskManager(repo, eventErrorHandler)
-	preloadingTaskService := services.NewPreloadingTaskService(taskManager, eventErrorHandler)
+	taskManager := task_manager.New(repo, eventErrorHandler)
+	preloadingTaskService := preloader_service.New(taskManager, eventErrorHandler, monitoringService)
 
-	waitingTaskService := services.NewWaitingTaskService(preloadingTaskService.GetPreloadedChan())
+	waitingTaskService := waiting_service.New(preloadingTaskService.GetPreloadedChan(), monitoringService)
 
-	senderService := services.NewTaskSender(
+	senderService := task_sender_service.New(
 		taskManager,
 		waitingTaskService.GetReadyToSendChan(),
 		nil,
 		eventErrorHandler,
+		monitoringService,
 	)
 
 	return &triggerHook{
@@ -41,6 +50,7 @@ func Default(client *sql.DB) contracts.TasksDeferredInterface {
 		preloadingTaskService: preloadingTaskService,
 		senderService:         senderService,
 		taskManager:           taskManager,
+		monitoringService:     monitoringService,
 	}
 }
 
@@ -50,6 +60,7 @@ type triggerHook struct {
 	senderService         contracts.TaskSenderInterface
 	taskManager           contracts.TaskManagerInterface
 	eventErrorHandler     contracts.EventErrorHandlerInterface
+	monitoringService     contracts.MonitoringInterface
 }
 
 func (s *triggerHook) SetTransport(externalSender func(task domain.Task)) {
@@ -77,6 +88,7 @@ func (s *triggerHook) Run() error {
 	go s.preloadingTaskService.Preload()
 	go s.senderService.Send()
 	go s.waitingTaskService.WaitUntilExecTime()
+	go s.monitoringService.Run()
 
 	return s.eventErrorHandler.Listen()
 }

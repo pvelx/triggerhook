@@ -1,4 +1,4 @@
-package monitoring
+package monitoring_service
 
 import (
 	"github.com/pvelx/triggerHook/contracts"
@@ -49,7 +49,7 @@ func TestMainFlow(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			topicName := "topic"
-			monitoringService := NewMonitoringService(test.periodMeasure)
+			monitoringService := New(test.periodMeasure)
 			monitoringService.Init(topicName, test.metricType)
 			go monitoringService.Run()
 			time.Sleep(10 * time.Millisecond)
