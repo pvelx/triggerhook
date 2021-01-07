@@ -9,42 +9,57 @@ import (
 
 func TestMainFlow(t *testing.T) {
 	tests := []struct {
-		name            string
-		inputMeasure    []int64
-		expectedMeasure []int64
-		periodInputPub  time.Duration
-		periodSending   time.Duration
-		metricType      contracts.MetricType
+		name                     string
+		inputMeasurement         []int64
+		expectedMeasurementEvent []contracts.MeasurementEvent
+		periodInputPub           time.Duration
+		periodMeasure            time.Duration
+		metricType               contracts.MetricType
 	}{
 		{
-			name:            "absolute metric",
-			inputMeasure:    []int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-			expectedMeasure: []int64{1, 3, 5, 7, 9},
-			periodInputPub:  50 * time.Millisecond,
-			periodSending:   100 * time.Millisecond,
-			metricType:      contracts.Absolute,
+			name:             "value metric",
+			inputMeasurement: []int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			expectedMeasurementEvent: []contracts.MeasurementEvent{
+				{Measurement: 1},
+				{Measurement: 3},
+				{Measurement: 5},
+				{Measurement: 7},
+				{Measurement: 9},
+			},
+			periodInputPub: 50 * time.Millisecond,
+			periodMeasure:  100 * time.Millisecond,
+			metricType:     contracts.Value,
 		},
 		{
-			name:            "periodic metric",
-			inputMeasure:    []int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-			expectedMeasure: []int64{2, 10, 18, 26, 34},
-			periodInputPub:  50 * time.Millisecond,
-			periodSending:   100 * time.Millisecond,
-			metricType:      contracts.Periodic,
+			name:             "velocity metric",
+			inputMeasurement: []int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			expectedMeasurementEvent: []contracts.MeasurementEvent{
+				{Measurement: 2},
+				{Measurement: 10},
+				{Measurement: 18},
+				{Measurement: 26},
+				{Measurement: 34},
+			},
+			periodInputPub: 50 * time.Millisecond,
+			periodMeasure:  100 * time.Millisecond,
+			metricType:     contracts.Velocity,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			topicName := "oneTopic"
-			monitoringService := NewMonitoringService(test.periodSending)
+			topicName := "topic"
+			monitoringService := NewMonitoringService(test.periodMeasure)
 			monitoringService.Init(topicName, test.metricType)
 			go monitoringService.Run()
 			time.Sleep(10 * time.Millisecond)
 
-			var actualMeasureCh = make(chan int64)
-			consumer := func(measure int64) {
-				actualMeasureCh <- measure
+			var actualMeasurementCh = make(chan contracts.MeasurementEvent)
+			consumer := func(measurementEvent contracts.MeasurementEvent) {
+				actualMeasurementCh <- measurementEvent
+
+				assert.Equal(t, measurementEvent.PeriodMeasure, test.periodMeasure,
+					"Unexpected period of measure")
 			}
 
 			if _, err := monitoringService.Sub(topicName, consumer); err != nil {
@@ -55,7 +70,7 @@ func TestMainFlow(t *testing.T) {
 			for worker := 0; worker < 2; worker++ {
 				go func() {
 					<-blockCh
-					for _, measure := range test.inputMeasure {
+					for _, measure := range test.inputMeasurement {
 						if err := monitoringService.Pub(topicName, measure); err != nil {
 							t.Fatal(err)
 						}
@@ -65,14 +80,15 @@ func TestMainFlow(t *testing.T) {
 			}
 			close(blockCh)
 
-			current := 0
-			for actualMeasure := range actualMeasureCh {
-				assert.Equal(t, test.expectedMeasure[current], actualMeasure, "Measure is not expected")
-				current++
-				if len(test.expectedMeasure) == current {
-					break
-				}
+			for i := 0; i < len(test.expectedMeasurementEvent); i++ {
+				assert.Equal(t,
+					test.expectedMeasurementEvent[i].Measurement,
+					(<-actualMeasurementCh).Measurement,
+					"Measurement is not expected",
+				)
 			}
+
+			assert.Len(t, actualMeasurementCh, 0, "Unexpected count of measurement")
 		})
 	}
 }

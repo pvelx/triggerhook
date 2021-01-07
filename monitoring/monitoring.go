@@ -16,37 +16,38 @@ type MetricInterface interface {
 	Get() int64
 }
 
-func NewMonitoringService(periodSending time.Duration) contracts.MonitoringInterface {
+func NewMonitoringService(periodMeasure time.Duration) contracts.MonitoringInterface {
 	return &Monitoring{
-		periodSending: periodSending,
+		periodMeasure: periodMeasure,
 		metrics:       make(map[string]MetricInterface),
 		subscriptions: make(map[string][]*Subscription),
+		eventChCap:    1000,
 	}
 }
 
 type Subscription struct {
-	topic  string
-	chanel chan int64
+	eventCh chan contracts.MeasurementEvent
 }
 
 func (s *Subscription) Close() {
-	close(s.chanel)
+	close(s.eventCh)
 }
 
 type Monitoring struct {
-	periodSending time.Duration
+	periodMeasure time.Duration
 	metrics       map[string]MetricInterface
 	subscriptions map[string][]*Subscription
+	eventChCap    int
 }
 
 func (m *Monitoring) Init(topic string, calcType contracts.MetricType) {
 	var metric MetricInterface
 
 	switch calcType {
-	case contracts.Absolute:
-		metric = &AbsoluteMetric{}
-	case contracts.Periodic:
-		metric = &PeriodicMetric{}
+	case contracts.Velocity:
+		metric = &VelocityMetric{}
+	case contracts.Value:
+		metric = &ValueMetric{}
 	}
 
 	m.metrics[topic] = metric
@@ -68,18 +69,22 @@ func (m *Monitoring) Pub(topic string, measure int64) error {
 	return nil
 }
 
-func (m *Monitoring) Sub(topic string, callback func(measure int64)) (contracts.SubscriptionInterface, error) {
+func (m *Monitoring) Sub(
+	topic string,
+	callback func(measurementEvent contracts.MeasurementEvent),
+) (contracts.SubscriptionInterface, error) {
+
 	if _, ok := m.metrics[topic]; !ok {
 		return nil, NoTopic
 	}
 
 	subscription := &Subscription{
-		chanel: make(chan int64, 1000),
+		eventCh: make(chan contracts.MeasurementEvent, m.eventChCap),
 	}
 	m.subscriptions[topic] = append(m.subscriptions[topic], subscription)
 
 	go func() {
-		for measure := range subscription.chanel {
+		for measure := range subscription.eventCh {
 			callback(measure)
 		}
 	}()
@@ -91,12 +96,17 @@ func (m *Monitoring) Run() {
 	for {
 		for topic, topicSubscriptions := range m.subscriptions {
 			measure := m.metrics[topic].Get()
+			now := time.Now()
 
 			for _, subscription := range topicSubscriptions {
-				subscription.chanel <- measure
+				subscription.eventCh <- contracts.MeasurementEvent{
+					Measurement:   measure,
+					Time:          now,
+					PeriodMeasure: m.periodMeasure,
+				}
 			}
 		}
 
-		time.Sleep(m.periodSending)
+		time.Sleep(m.periodMeasure)
 	}
 }
