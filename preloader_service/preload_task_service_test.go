@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/event_error_handler_service"
 	"github.com/pvelx/triggerHook/repository"
 	"github.com/pvelx/triggerHook/task_manager"
 	"github.com/pvelx/triggerHook/util"
@@ -142,7 +143,7 @@ func TestMainFlow(t *testing.T) {
 	preloadingTaskService := New(taskManagerMock, &event_error_handler_service.ErrorHandlerMock{}, nil)
 
 	chPreloadedTask := preloadingTaskService.GetPreloadedChan()
-	go preloadingTaskService.Preload()
+	go preloadingTaskService.Run()
 
 	receivedTasks := make(map[string]domain.Task)
 

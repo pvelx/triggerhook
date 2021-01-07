@@ -81,7 +81,7 @@ func (eeh *EventErrorHandler) SetErrorHandler(level contracts.Level, eventHandle
 	eeh.eventHandlers[level] = eventHandler
 }
 
-func (eeh *EventErrorHandler) Listen() error {
+func (eeh *EventErrorHandler) Run() error {
 	for event := range eeh.chEvent {
 
 		eventHandler, ok := eeh.eventHandlers[event.Level]

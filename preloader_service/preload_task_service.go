@@ -63,7 +63,7 @@ func (s *preloadingTaskService) AddNewTask(task *domain.Task) error {
 	return nil
 }
 
-func (s *preloadingTaskService) Preload() {
+func (s *preloadingTaskService) Run() {
 	for {
 		result, err := s.taskManager.GetTasksToComplete(s.timePreload)
 		switch {

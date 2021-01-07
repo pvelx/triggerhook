@@ -60,7 +60,7 @@ func TestSendEvent(t *testing.T) {
 	})
 
 	go func() {
-		errorCh <- eventErrorHandler.Listen()
+		errorCh <- eventErrorHandler.Run()
 	}()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

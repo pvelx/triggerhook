@@ -28,7 +28,7 @@ func TestMainFlow(t *testing.T) {
 			},
 			periodInputPub: 50 * time.Millisecond,
 			periodMeasure:  100 * time.Millisecond,
-			metricType:     contracts.Value,
+			metricType:     contracts.ValueMetricType,
 		},
 		{
 			name:             "velocity metric",
@@ -42,7 +42,7 @@ func TestMainFlow(t *testing.T) {
 			},
 			periodInputPub: 50 * time.Millisecond,
 			periodMeasure:  100 * time.Millisecond,
-			metricType:     contracts.Velocity,
+			metricType:     contracts.VelocityMetricType,
 		},
 	}
 	for _, test := range tests {

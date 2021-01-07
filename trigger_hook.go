@@ -32,9 +32,18 @@ func Default(client *sql.DB) contracts.TasksDeferredInterface {
 	}
 
 	taskManager := task_manager.New(repo, eventErrorHandler)
-	preloadingTaskService := preloader_service.New(taskManager, eventErrorHandler, monitoringService)
 
-	waitingTaskService := waiting_service.New(preloadingTaskService.GetPreloadedChan(), monitoringService)
+	preloadingTaskService := preloader_service.New(
+		taskManager,
+		eventErrorHandler,
+		monitoringService,
+	)
+
+	waitingTaskService := waiting_service.New(
+		preloadingTaskService.GetPreloadedChan(),
+		monitoringService,
+		taskManager,
+	)
 
 	senderService := task_sender_service.New(
 		taskManager,
@@ -49,7 +58,6 @@ func Default(client *sql.DB) contracts.TasksDeferredInterface {
 		waitingTaskService:    waitingTaskService,
 		preloadingTaskService: preloadingTaskService,
 		senderService:         senderService,
-		taskManager:           taskManager,
 		monitoringService:     monitoringService,
 	}
 }
@@ -58,7 +66,6 @@ type triggerHook struct {
 	waitingTaskService    contracts.WaitingTaskServiceInterface
 	preloadingTaskService contracts.PreloadingTaskServiceInterface
 	senderService         contracts.TaskSenderInterface
-	taskManager           contracts.TaskManagerInterface
 	eventErrorHandler     contracts.EventErrorHandlerInterface
 	monitoringService     contracts.MonitoringInterface
 }
@@ -72,12 +79,7 @@ func (s *triggerHook) SetErrorHandler(level contracts.Level, externalErrorHandle
 }
 
 func (s *triggerHook) Delete(taskId string) error {
-	if err := s.taskManager.Delete(taskId); err != nil {
-		return err
-	}
-	s.waitingTaskService.CancelIfExist(taskId)
-
-	return nil
+	return s.waitingTaskService.CancelIfExist(taskId)
 }
 
 func (s *triggerHook) Create(task *domain.Task) error {
@@ -85,10 +87,10 @@ func (s *triggerHook) Create(task *domain.Task) error {
 }
 
 func (s *triggerHook) Run() error {
-	go s.preloadingTaskService.Preload()
-	go s.senderService.Send()
-	go s.waitingTaskService.WaitUntilExecTime()
+	go s.preloadingTaskService.Run()
+	go s.senderService.Run()
+	go s.waitingTaskService.Run()
 	go s.monitoringService.Run()
 
-	return s.eventErrorHandler.Listen()
+	return s.eventErrorHandler.Run()
 }

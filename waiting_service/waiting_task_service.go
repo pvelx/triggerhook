@@ -12,6 +12,7 @@ import (
 func New(
 	chPreloadedTasks <-chan domain.Task,
 	monitoring contracts.MonitoringInterface,
+	taskManager contracts.TaskManagerInterface,
 ) contracts.WaitingTaskServiceInterface {
 
 	//if err := monitoring.Init("", contracts.ValueMetricType); err != nil {
@@ -25,6 +26,7 @@ func New(
 		chTasksReadyToSend: make(chan domain.Task, 10000000),
 		mu:                 &sync.Mutex{},
 		monitoring:         monitoring,
+		taskManager:        taskManager,
 	}
 
 	return service
@@ -37,6 +39,7 @@ type waitingTaskService struct {
 	chTasksReadyToSend chan domain.Task
 	mu                 *sync.Mutex
 	monitoring         contracts.MonitoringInterface
+	taskManager        contracts.TaskManagerInterface
 }
 
 func (s *waitingTaskService) GetReadyToSendChan() <-chan domain.Task {
@@ -61,11 +64,16 @@ func (s *waitingTaskService) takeTaskFromWaitingList() *domain.Task {
 	return s.tasksWaitingList.Take()
 }
 
-func (s *waitingTaskService) CancelIfExist(taskId string) {
+func (s *waitingTaskService) CancelIfExist(taskId string) error {
+	if err := s.taskManager.Delete(taskId); err != nil {
+		return err
+	}
 	s.chCanceledTasks <- taskId
+
+	return nil
 }
 
-func (s *waitingTaskService) WaitUntilExecTime() {
+func (s *waitingTaskService) Run() {
 	updatedQueue := make(chan bool)
 
 	go func() {

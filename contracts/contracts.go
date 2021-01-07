@@ -29,7 +29,7 @@ type PrioritizedTaskListInterface interface {
 }
 
 type TaskSenderInterface interface {
-	Send()
+	Run()
 
 	/*
 		Setting the function with the desired message sending method
@@ -89,16 +89,16 @@ var (
 type PreloadingTaskServiceInterface interface {
 	AddNewTask(task *domain.Task) error
 	GetPreloadedChan() <-chan domain.Task
-	Preload()
+	Run()
 }
 
 /*	--------------------------------------------------
 	Waiting task service
 */
 type WaitingTaskServiceInterface interface {
-	WaitUntilExecTime()
-	CancelIfExist(taskId string)
+	CancelIfExist(taskId string) error
 	GetReadyToSendChan() <-chan domain.Task
+	Run()
 }
 
 /*	--------------------------------------------------
@@ -149,7 +149,7 @@ type EventErrorHandlerInterface interface {
 	/*
 		Launch the event error handler
 	*/
-	Listen() error
+	Run() error
 }
 
 /*	--------------------------------------------------

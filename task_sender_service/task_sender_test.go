@@ -39,7 +39,7 @@ func TestTaskSender(t *testing.T) {
 	service := New(taskManagerMock, chTaskReadyToSend, nil, &event_error_handler_service.ErrorHandlerMock{}, nil)
 	service.SetTransport(func(task domain.Task) {})
 
-	go service.Send()
+	go service.Run()
 
 	go createReadyToSendTask(chTaskReadyToSend, 200)
 	time.Sleep(25 * time.Millisecond)

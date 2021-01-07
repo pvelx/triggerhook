@@ -61,7 +61,7 @@ func (s *taskSender) SetTransport(sendByExternalTransport func(task domain.Task)
 	s.sendByExternalTransport = sendByExternalTransport
 }
 
-func (s *taskSender) Send() {
+func (s *taskSender) Run() {
 	if s.sendByExternalTransport == nil {
 		panic("Transport for sending was not added")
 	}

@@ -91,7 +91,7 @@ func TestMain(m *testing.M) {
 	db.SetMaxIdleConns(idleConn)
 	db.SetMaxOpenConns(maxConn)
 
-	repository := NewRepository(db, appInstanceId, ErrorHandler{}, nil)
+	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, nil)
 
 	if err := repository.Up(); err != nil {
 		log.Fatalf("Up schema is fail: %s", err)
@@ -584,10 +584,8 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-/*
-	----------------------------------------------------
-	-------------------- test tools --------------------
-	----------------------------------------------------
+/*	----------------------------------------------------
+	Test tools
 */
 func getTaskInstance(execTime int64) domain.Task {
 	return domain.Task{Id: util.NewId(), ExecTime: execTime}
