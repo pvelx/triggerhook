@@ -1,57 +1,17 @@
 package triggerHook
 
 import (
-	"database/sql"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/event_error_handler_service"
-	"github.com/pvelx/triggerHook/monitoring_service"
-	"github.com/pvelx/triggerHook/preloader_service"
-	"github.com/pvelx/triggerHook/repository"
-	"github.com/pvelx/triggerHook/task_manager"
-	"github.com/pvelx/triggerHook/task_sender_service"
-	"github.com/pvelx/triggerHook/util"
-	"github.com/pvelx/triggerHook/waiting_service"
-	"time"
 )
 
-var appInstanceId string
-
-func init() {
-	appInstanceId = util.NewId()
-}
-
-func Default(client *sql.DB) contracts.TasksDeferredInterface {
-	eventErrorHandler := event_error_handler_service.New(false)
-
-	monitoringService := monitoring_service.New(5 * time.Second)
-
-	repo := repository.New(client, appInstanceId, eventErrorHandler, nil)
-	if err := repo.Up(); err != nil {
-		panic(err)
-	}
-
-	taskManager := task_manager.New(repo, eventErrorHandler)
-
-	preloadingTaskService := preloader_service.New(
-		taskManager,
-		eventErrorHandler,
-		monitoringService,
-	)
-
-	waitingTaskService := waiting_service.New(
-		preloadingTaskService.GetPreloadedChan(),
-		monitoringService,
-		taskManager,
-	)
-
-	senderService := task_sender_service.New(
-		taskManager,
-		waitingTaskService.GetReadyToSendChan(),
-		nil,
-		eventErrorHandler,
-		monitoringService,
-	)
+func New(
+	eventErrorHandler contracts.EventErrorHandlerInterface,
+	waitingTaskService contracts.WaitingTaskServiceInterface,
+	preloadingTaskService contracts.PreloadingTaskServiceInterface,
+	senderService contracts.TaskSenderInterface,
+	monitoringService contracts.MonitoringInterface,
+) contracts.TasksDeferredInterface {
 
 	return &triggerHook{
 		eventErrorHandler:     eventErrorHandler,
@@ -70,21 +30,6 @@ type triggerHook struct {
 	monitoringService     contracts.MonitoringInterface
 }
 
-func (s *triggerHook) SetTransport(externalSender func(task domain.Task)) {
-	s.senderService.SetTransport(externalSender)
-}
-
-func (s *triggerHook) SetErrorHandler(level contracts.Level, externalErrorHandler func(event contracts.EventError)) {
-	s.eventErrorHandler.SetErrorHandler(level, externalErrorHandler)
-}
-
-func (s *triggerHook) Sub(topic string, callback func(measurementEvent contracts.MeasurementEvent)) (
-	contracts.SubscriptionInterface,
-	error,
-) {
-	return s.monitoringService.Sub(topic, callback)
-}
-
 func (s *triggerHook) Delete(taskId string) error {
 	return s.waitingTaskService.CancelIfExist(taskId)
 }
@@ -95,8 +40,8 @@ func (s *triggerHook) Create(task *domain.Task) error {
 
 func (s *triggerHook) Run() error {
 	go s.preloadingTaskService.Run()
-	go s.senderService.Run()
 	go s.waitingTaskService.Run()
+	go s.senderService.Run()
 	go s.monitoringService.Run()
 
 	return s.eventErrorHandler.Run()

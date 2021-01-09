@@ -7,7 +7,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/event_error_handler_service"
+	"github.com/pvelx/triggerHook/error_service"
 	"github.com/pvelx/triggerHook/util"
 	"github.com/stretchr/testify/assert"
 	"io"
@@ -91,7 +91,7 @@ func TestMain(m *testing.M) {
 	db.SetMaxIdleConns(idleConn)
 	db.SetMaxOpenConns(maxConn)
 
-	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, nil)
+	repository := New(db, appInstanceId, &error_service.ErrorHandlerMock{}, nil)
 
 	if err := repository.Up(); err != nil {
 		log.Fatalf("Up schema is fail: %s", err)
@@ -111,7 +111,7 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	clear()
 	loadFixtures("data_1")
 
-	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, nil)
+	repository := New(db, appInstanceId, &error_service.ErrorHandlerMock{}, nil)
 
 	expectedTaskCount := 35060
 	workersCount := 10
@@ -184,8 +184,13 @@ func TestParallel(t *testing.T) {
 	taskCount := 0
 	preloadingTimeRange := 5 * time.Second
 	maxCountTasksInCollection := 1000
-	var cleaningFrequency int32 = 1
-	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, &Options{maxCountTasksInCollection, cleaningFrequency})
+	cleaningFrequency := 1
+	repository := New(
+		db,
+		appInstanceId,
+		&error_service.ErrorHandlerMock{},
+		&Options{maxCountTasksInCollection, cleaningFrequency},
+	)
 
 	input := []struct {
 		tasksCount       int
@@ -208,7 +213,6 @@ func TestParallel(t *testing.T) {
 		taskCount = taskCount + item.tasksCount*creatingWorkerNumber
 	}
 
-	fmt.Println("taskCount", taskCount)
 	for w := 0; w < creatingWorkerNumber; w++ {
 		go func() {
 			for _, item := range input {
@@ -287,7 +291,6 @@ func TestParallel(t *testing.T) {
 					countDeletedTasks = countDeletedTasks + len(batch)
 					mu.Unlock()
 
-					fmt.Println("closing", countDeletedTasks, taskCount)
 					if countDeletedTasks == taskCount {
 						close(wait)
 					}
@@ -303,7 +306,7 @@ func TestFindBySecToExecTime(t *testing.T) {
 	clear()
 	loadFixtures("data_2")
 
-	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, nil)
+	repository := New(db, appInstanceId, &error_service.ErrorHandlerMock{}, nil)
 
 	expectedCountTaskOnIteration := []int{33, 981, 894, 128, 212, 174, 90, 148, 167, 108, 26, 966, 967, 0, 835, 140,
 		538, 127, 209, 356, 605, 354, 591, 0, 0, 0, 0, 0}
@@ -368,7 +371,7 @@ func TestCreateRaceCondition(t *testing.T) {
 	clear()
 
 	maxCountTasksInCollection := 100
-	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, &Options{
+	repository := New(db, appInstanceId, &error_service.ErrorHandlerMock{}, &Options{
 		maxCountTasksInCollection,
 		10,
 	})
@@ -445,9 +448,9 @@ func TestCreateRaceCondition(t *testing.T) {
 func TestDeleteBunch(t *testing.T) {
 	clear()
 	loadFixtures("data_3")
-	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, &Options{
-		maxCountTasksInCollection: 1000,
-		cleaningFrequency:         1,
+	repository := New(db, appInstanceId, &error_service.ErrorHandlerMock{}, &Options{
+		MaxCountTasksInCollection: 1000,
+		CleaningFrequency:         1,
 	})
 
 	tasksMustNotBeDeleted := []domain.Task{
@@ -540,7 +543,7 @@ func TestDeleteBunch(t *testing.T) {
 func TestCreate(t *testing.T) {
 	clear()
 	maxCountTasksInCollection := 100
-	repository := New(db, appInstanceId, &event_error_handler_service.ErrorHandlerMock{}, &Options{maxCountTasksInCollection, 10})
+	repository := New(db, appInstanceId, &error_service.ErrorHandlerMock{}, &Options{maxCountTasksInCollection, 10})
 
 	input := []struct {
 		tasksCount       int

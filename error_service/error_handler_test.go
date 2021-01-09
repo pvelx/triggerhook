@@ -1,4 +1,4 @@
-package event_error_handler_service
+package error_service
 
 import (
 	"errors"
@@ -42,21 +42,19 @@ func TestSendEvent(t *testing.T) {
 			eventMessage: "test level error",
 		},
 	}
-
-	eventErrorHandler := New(true)
 	eventDebugCh := make(chan contracts.EventError, 1)
 	eventErrorCh := make(chan contracts.EventError, 1)
 	eventFatalCh := make(chan contracts.EventError, 1)
 	errorCh := make(chan error, 1)
 
-	eventErrorHandler.SetErrorHandler(contracts.LevelDebug, func(event contracts.EventError) {
-		eventDebugCh <- event
-	})
-	eventErrorHandler.SetErrorHandler(contracts.LevelError, func(event contracts.EventError) {
-		eventErrorCh <- event
-	})
-	eventErrorHandler.SetErrorHandler(contracts.LevelFatal, func(event contracts.EventError) {
-		eventFatalCh <- event
+	eventErrorHandler := New(&Options{
+		EventHandlers: map[contracts.Level]func(event contracts.EventError){
+			contracts.LevelDebug: func(event contracts.EventError) { eventDebugCh <- event },
+			contracts.LevelError: func(event contracts.EventError) { eventErrorCh <- event },
+			contracts.LevelFatal: func(event contracts.EventError) { eventFatalCh <- event },
+		},
+		Debug:      false,
+		ChEventCap: 0,
 	})
 
 	go func() {

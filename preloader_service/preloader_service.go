@@ -1,34 +1,60 @@
 package preloader_service
 
 import (
+	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"sync"
 	"time"
 )
 
+type Options struct {
+	TimePreload time.Duration
+
+	/*
+		Coefficient must be more than one. If the coefficient <= 1 then it may lead to save not taken task as taken
+	*/
+	CoefTimePreloadOfNewTask int
+	TaskNumberInOneSearch    int
+	WorkersCount             int
+	ChPreloadedTaskCap       int
+}
+
 func New(
 	taskManager contracts.TaskManagerInterface,
 	eventErrorHandler contracts.EventErrorHandlerInterface,
 	monitoring contracts.MonitoringInterface,
+	options *Options,
 ) contracts.PreloadingTaskServiceInterface {
 
 	//if err := monitoring.Init("", contracts.ValueMetricType); err != nil {
 	//	panic(err)
 	//}
 
-	return &preloadingTaskService{
-		taskManager:     taskManager,
-		eh:              eventErrorHandler,
-		chPreloadedTask: make(chan domain.Task, 10000000),
-		timePreload:     5 * time.Second,
+	if options == nil {
+		options = &Options{}
+	}
 
-		/*
-			Coefficient must be more than one. If the coefficient <= 1 then it may lead to save not taken task as taken
-		*/
-		coefTimePreloadOfNewTask: 2,
-		taskNumberInOneSearch:    1000,
-		workersCount:             10,
+	defaultOptions := Options{
+		TimePreload:              5 * time.Second,
+		CoefTimePreloadOfNewTask: 2,
+		TaskNumberInOneSearch:    1000,
+		WorkersCount:             10,
+		ChPreloadedTaskCap:       1000000,
+	}
+
+	if err := mergo.Merge(options, defaultOptions); err != nil {
+		panic(err)
+	}
+
+	return &preloadingTaskService{
+		taskManager:              taskManager,
+		eh:                       eventErrorHandler,
+		chPreloadedTask:          make(chan domain.Task, options.ChPreloadedTaskCap),
+		timePreload:              options.TimePreload,
+		coefTimePreloadOfNewTask: options.CoefTimePreloadOfNewTask,
+		taskNumberInOneSearch:    options.TaskNumberInOneSearch,
+		workersCount:             options.WorkersCount,
 		monitoring:               monitoring,
 	}
 }

@@ -28,13 +28,12 @@ type PrioritizedTaskListInterface interface {
 	DeleteIfExist(taskId string) bool
 }
 
+/*	--------------------------------------------------
+	Task sender
+*/
+
 type TaskSenderInterface interface {
 	Run()
-
-	/*
-		Setting the function with the desired message sending method
-	*/
-	SetTransport(func(task domain.Task))
 }
 
 /*	--------------------------------------------------
@@ -135,12 +134,6 @@ type EventError struct {
 }
 
 type EventErrorHandlerInterface interface {
-
-	/*
-		YOU SHOULD TAKE CARE HANDLE EVENT, FOR EXAMPLE, FOR WRITE A LOG
-	*/
-	SetErrorHandler(level Level, eventHandler func(event EventError))
-
 	/*
 		Throws new event. May be used parallel
 	*/
@@ -176,31 +169,24 @@ var (
 	NoSubscribes = errors.New("subscribers of the topic do not exist")
 )
 
-type SubscriptionInterface interface {
-	Close()
-}
-
 type MeasurementEvent struct {
 	Measurement   int64
 	Time          time.Time
 	PeriodMeasure time.Duration
 }
 
+type Topic string
+
 type MonitoringInterface interface {
 	/*
 		Init measurement
 	*/
-	Init(topic string, metricType MetricType) error
+	Init(topic Topic, metricType MetricType) error
 
 	/*
 		Publishing measurement events
 	*/
-	Pub(topic string, measurement int64) error
-
-	/*
-		Subscribe to events of measure
-	*/
-	Sub(topic string, callback func(measurementEvent MeasurementEvent)) (SubscriptionInterface, error)
+	Pub(topic Topic, measurement int64) error
 
 	/*
 		Launch monitoring
@@ -215,22 +201,6 @@ type TasksDeferredInterface interface {
 	Create(task *domain.Task) error
 
 	Delete(taskId string) error
-
-	/*
-		Setting the function with the desired message sending method (for example, RabbitMQ)
-		YOU SHOULD TAKE CARE HANDLE EXCEPTIONS WHILE SEND IN THIS FUNCTION
-	*/
-	SetTransport(func(task domain.Task))
-
-	/*
-		Configure the function using the desired error handler (for example, file logger, Sentry or other)
-	*/
-	SetErrorHandler(Level, func(EventError))
-
-	/*
-		Subscribe to events of measure
-	*/
-	Sub(topic string, callback func(measurementEvent MeasurementEvent)) (SubscriptionInterface, error)
 
 	/*
 		LAUNCHER TRIGGER HOOK :) !!!

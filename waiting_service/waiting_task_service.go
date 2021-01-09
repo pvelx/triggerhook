@@ -1,6 +1,7 @@
 package waiting_service
 
 import (
+	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"github.com/pvelx/triggerHook/prioritized_task_list"
@@ -9,11 +10,28 @@ import (
 	"time"
 )
 
+type Options struct {
+	ChTasksReadyToSendCap int
+	ChCanceledTasksCap    int
+}
+
 func New(
 	chPreloadedTasks <-chan domain.Task,
 	monitoring contracts.MonitoringInterface,
 	taskManager contracts.TaskManagerInterface,
+	options *Options,
 ) contracts.WaitingTaskServiceInterface {
+
+	if options == nil {
+		options = &Options{}
+	}
+
+	if err := mergo.Merge(options, Options{
+		ChTasksReadyToSendCap: 1000000,
+		ChCanceledTasksCap:    1000000,
+	}); err != nil {
+		panic(err)
+	}
 
 	//if err := monitoring.Init("", contracts.ValueMetricType); err != nil {
 	//	panic(err)
@@ -22,8 +40,8 @@ func New(
 	service := &waitingTaskService{
 		tasksWaitingList:   prioritized_task_list.NewHeapPrioritizedTaskList([]domain.Task{}),
 		chPreloadedTasks:   chPreloadedTasks,
-		chCanceledTasks:    make(chan string, 10000000),
-		chTasksReadyToSend: make(chan domain.Task, 10000000),
+		chCanceledTasks:    make(chan string, options.ChCanceledTasksCap),
+		chTasksReadyToSend: make(chan domain.Task, options.ChTasksReadyToSendCap),
 		mu:                 &sync.Mutex{},
 		monitoring:         monitoring,
 		taskManager:        taskManager,

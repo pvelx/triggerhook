@@ -20,6 +20,7 @@ func TestMainFlow(t *testing.T) {
 			name:             "value metric",
 			inputMeasurement: []int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 			expectedMeasurementEvent: []contracts.MeasurementEvent{
+				{Measurement: 0},
 				{Measurement: 1},
 				{Measurement: 3},
 				{Measurement: 5},
@@ -34,6 +35,7 @@ func TestMainFlow(t *testing.T) {
 			name:             "velocity metric",
 			inputMeasurement: []int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 			expectedMeasurementEvent: []contracts.MeasurementEvent{
+				{Measurement: 0},
 				{Measurement: 2},
 				{Measurement: 10},
 				{Measurement: 18},
@@ -47,24 +49,25 @@ func TestMainFlow(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			var actualMeasurementCh = make(chan contracts.MeasurementEvent)
+			var topicName contracts.Topic = "topic"
 
-			topicName := "topic"
-			monitoringService := New(test.periodMeasure)
+			monitoringService := New(&Options{
+				PeriodMeasure: test.periodMeasure,
+				EventChCap:    1000000,
+				Subscriptions: map[contracts.Topic]func(event contracts.MeasurementEvent){
+					topicName: func(measurementEvent contracts.MeasurementEvent) {
+						actualMeasurementCh <- measurementEvent
+
+						assert.Equal(t, measurementEvent.PeriodMeasure, test.periodMeasure,
+							"Unexpected period of measure")
+					},
+				},
+			})
+
 			monitoringService.Init(topicName, test.metricType)
 			go monitoringService.Run()
 			time.Sleep(10 * time.Millisecond)
-
-			var actualMeasurementCh = make(chan contracts.MeasurementEvent)
-			consumer := func(measurementEvent contracts.MeasurementEvent) {
-				actualMeasurementCh <- measurementEvent
-
-				assert.Equal(t, measurementEvent.PeriodMeasure, test.periodMeasure,
-					"Unexpected period of measure")
-			}
-
-			if _, err := monitoringService.Sub(topicName, consumer); err != nil {
-				t.Fatal(err)
-			}
 
 			blockCh := make(chan bool)
 			for worker := 0; worker < 2; worker++ {

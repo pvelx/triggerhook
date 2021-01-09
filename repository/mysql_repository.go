@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/VividCortex/mysqlerr"
 	"github.com/go-sql-driver/mysql"
+	"github.com/imdario/mergo"
 	"github.com/pkg/errors"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
@@ -19,14 +20,14 @@ type Options struct {
 	/*
 		It is approximately count of tasks in collection
 	*/
-	maxCountTasksInCollection int
+	MaxCountTasksInCollection int
 
 	/*
 		0 - disable deleting empty collections
 		1 - delete empty collection each times
 		n - delete empty collections every n times
 	*/
-	cleaningFrequency int32
+	CleaningFrequency int
 }
 
 func New(
@@ -35,14 +36,16 @@ func New(
 	eer contracts.EventErrorHandlerInterface,
 	options *Options,
 ) contracts.RepositoryInterface {
+
 	if options == nil {
-		/*
-			Default options
-		*/
-		options = &Options{
-			maxCountTasksInCollection: 1000,
-			cleaningFrequency:         10,
-		}
+		options = &Options{}
+	}
+
+	if err := mergo.Merge(options, Options{
+		MaxCountTasksInCollection: 1000,
+		CleaningFrequency:         10,
+	}); err != nil {
+		panic(err)
 	}
 
 	return &mysqlRepository{
@@ -69,7 +72,7 @@ func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 		task.Id,
 		task.ExecTime,
 		isTaken,
-		r.options.maxCountTasksInCollection,
+		r.options.MaxCountTasksInCollection,
 	}
 
 	if _, err := r.client.Exec(createTaskQuery, args...); err != nil {
@@ -126,7 +129,9 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (error error) {
 		It is enough do sometimes.
 	*/
 	atomic.AddInt32(&r.cleanRequestCount, 1)
-	if r.options.cleaningFrequency > 0 && atomic.LoadInt32(&r.cleanRequestCount)%r.options.cleaningFrequency == 0 {
+	if r.options.CleaningFrequency > 0 &&
+		atomic.LoadInt32(&r.cleanRequestCount)%int32(r.options.CleaningFrequency) == 0 {
+
 		if err := r.deleteEmptyCollections(); err != nil {
 			r.eer.New(contracts.LevelError, err.Error(), nil)
 		}
@@ -182,7 +187,7 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 	return nil
 }
 
-func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks domain.Tasks, error error) {
+func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks []domain.Task, error error) {
 	queryFindBySecToExecTime := `SELECT t.uuid, c.exec_time
 		FROM task t
 		INNER JOIN collection c on t.collection_id = c.id

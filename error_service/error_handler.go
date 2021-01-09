@@ -1,47 +1,39 @@
-package event_error_handler_service
+package error_service
 
 import (
 	"errors"
-	"fmt"
+	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerHook/contracts"
-	"path"
 	"runtime"
 	"time"
 )
 
-var (
-	baseFormat = "%s MESSAGE:%s METHOD:%s FILE:%s:%d EXTRA:%v\n"
-	formats    = map[contracts.Level]string{
-		contracts.LevelDebug: "DEBUG:" + baseFormat,
-		contracts.LevelError: "ERROR:" + baseFormat,
-		contracts.LevelFatal: "FATAL:" + baseFormat,
-	}
-)
+type Options struct {
+	/*
+		Configure the function using the desired error handler (for example, file logger, Sentry or other)
+	*/
+	EventHandlers map[contracts.Level]func(event contracts.EventError)
+	Debug         bool
+	ChEventCap    int
+}
 
-func New(debug bool) contracts.EventErrorHandlerInterface {
-	eventHandlers := make(map[contracts.Level]func(event contracts.EventError))
-	for level, format := range formats {
-		format := format
-		level := level
-		eventHandlers[level] = func(event contracts.EventError) {
-			_, shortMethod := path.Split(event.Method)
-			_, shortFile := path.Split(event.File)
-			fmt.Printf(
-				format,
-				event.Time.Format("2006-01-02 15:04:05.000"),
-				event.EventMessage,
-				shortMethod,
-				shortFile,
-				event.Line,
-				event.Extra,
-			)
-		}
+func New(options *Options) contracts.EventErrorHandlerInterface {
+
+	if options == nil {
+		options = &Options{}
+	}
+
+	if err := mergo.Merge(options, Options{
+		Debug:      false,
+		ChEventCap: 1000000,
+	}); err != nil {
+		panic(err)
 	}
 
 	return &EventErrorHandler{
-		chEvent:       make(chan contracts.EventError, 10000000),
-		eventHandlers: eventHandlers,
-		debug:         debug,
+		chEvent:       make(chan contracts.EventError, options.ChEventCap),
+		eventHandlers: options.EventHandlers,
+		debug:         options.Debug,
 	}
 }
 
@@ -77,16 +69,12 @@ func (eeh *EventErrorHandler) New(level contracts.Level, eventMessage string, ex
 	eeh.chEvent <- eventError
 }
 
-func (eeh *EventErrorHandler) SetErrorHandler(level contracts.Level, eventHandler func(event contracts.EventError)) {
-	eeh.eventHandlers[level] = eventHandler
-}
-
 func (eeh *EventErrorHandler) Run() error {
 	for event := range eeh.chEvent {
 
 		eventHandler, ok := eeh.eventHandlers[event.Level]
 		if !ok {
-			return errors.New(fmt.Sprintf("event handler for level:%d must be defined", event.Level))
+			continue
 		}
 
 		eventHandler(event)

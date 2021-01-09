@@ -4,10 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/pvelx/triggerHook/clients"
+	"github.com/pvelx/triggerHook/connection"
+	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerHook/error_service"
+	"github.com/pvelx/triggerHook/sender_service"
 	"log"
 	"math/rand"
+	"path"
 	"testing"
 	"time"
 )
@@ -90,40 +94,78 @@ var (
 //	os.Exit(code)
 //}
 
-func TestOne(t *testing.T) {
-
-	db = clients.NewMysqlClient("root", "secret", "127.0.0.1:3306", "test_db")
-	triggerHook := Default(db)
-
-	rand.Seed(time.Now().UnixNano())
-
-	f := 0
-	for r := 0; r < 10; r++ {
-		go func() {
-			for j := 0; j < 1000000; j++ {
-				task := &domain.Task{ExecTime: time.Now().Add(time.Duration(rand.Intn(30)) * time.Second).Unix()}
-				if err := triggerHook.Create(task); err != nil {
-					fmt.Println(err)
-				}
-				f++
-			}
-		}()
+var (
+	baseFormat = "%s MESSAGE:%s METHOD:%s FILE:%s:%d EXTRA:%v\n"
+	formats    = map[contracts.Level]string{
+		contracts.LevelDebug: "DEBUG:" + baseFormat,
+		contracts.LevelError: "ERROR:" + baseFormat,
+		contracts.LevelFatal: "FATAL:" + baseFormat,
 	}
-	//time.Sleep(time.Hour)
+)
+
+func TestExample(t *testing.T) {
 
 	i := 0
-	triggerHook.SetTransport(func(task domain.Task) {
+	transport := func(task domain.Task) {
 		i++
 		if i == 1e+4 {
 			i = 0
-			fmt.Println("send:", task)
+			fmt.Println("Send:", task)
 		}
+	}
+
+	eventHandlers := make(map[contracts.Level]func(event contracts.EventError))
+	for level, format := range formats {
+		format := format
+		level := level
+		eventHandlers[level] = func(event contracts.EventError) {
+			_, shortMethod := path.Split(event.Method)
+			_, shortFile := path.Split(event.File)
+			fmt.Printf(
+				format,
+				event.Time.Format("2006-01-02 15:04:05.000"),
+				event.EventMessage,
+				shortMethod,
+				shortFile,
+				event.Line,
+				event.Extra,
+			)
+		}
+	}
+
+	triggerHook := Build(Config{
+		Connection: connection.Options{
+			User:     "root",
+			Password: "secret",
+			Host:     "127.0.0.1:3306",
+			DbName:   "test_db",
+		},
+		ErrorServiceOptions: error_service.Options{
+			Debug:         false,
+			EventHandlers: eventHandlers,
+		},
+		SenderServiceOptions: sender_service.Options{
+			Transport: transport,
+		},
 	})
 
-	//time.Sleep(time.Second * 3)
+	rand.Seed(time.Now().UnixNano())
+
+	for w := 0; w < 10; w++ {
+		go func() {
+			for {
+				randomExecTime := time.Now().Add(time.Duration(rand.Intn(300)) * time.Second).Unix()
+				err := triggerHook.Create(&domain.Task{
+					ExecTime: randomExecTime,
+				})
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+		}()
+	}
 
 	if err := triggerHook.Run(); err != nil {
 		log.Fatal(err)
 	}
-
 }

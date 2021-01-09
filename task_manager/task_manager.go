@@ -1,21 +1,44 @@
 package task_manager
 
 import (
+	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
 	"github.com/pvelx/triggerHook/util"
 	"time"
 )
 
+type Options struct {
+	MaxRetry            int
+	TimeGapBetweenRetry time.Duration
+}
+
 func New(
 	repository contracts.RepositoryInterface,
 	eeh contracts.EventErrorHandlerInterface,
+	options *Options,
 ) contracts.TaskManagerInterface {
+
+	if err := repository.Up(); err != nil {
+		panic(err)
+	}
+
+	if options == nil {
+		options = &Options{}
+	}
+
+	if err := mergo.Merge(options, Options{
+		MaxRetry:            3,
+		TimeGapBetweenRetry: 10 * time.Millisecond,
+	}); err != nil {
+		panic(err)
+	}
+
 	return &taskManager{
 		repository:          repository,
 		eeh:                 eeh,
-		maxRetry:            3,
-		timeGapBetweenRetry: 10 * time.Millisecond,
+		maxRetry:            options.MaxRetry,
+		timeGapBetweenRetry: options.TimeGapBetweenRetry,
 	}
 }
 
