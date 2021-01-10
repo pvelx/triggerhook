@@ -283,7 +283,7 @@ func TestParallel(t *testing.T) {
 
 			done:
 				if len(batch) > 0 {
-					errDelete := repository.Delete(batch)
+					_, errDelete := repository.Delete(batch)
 					if errDelete != nil {
 						log.Fatal(errDelete, "Error while delete")
 					}
@@ -522,7 +522,7 @@ func TestDeleteBunch(t *testing.T) {
 	collectionsMustBeDeleted := []int{25, 67, 107, 129}
 	collectionsMustNotBeDeleted := []int{14, 37, 42, 48, 63, 74, 81, 94, 100, 110, 122, 123, 124, 125, 126, 127, 128}
 
-	err := repository.Delete(tasksMustBeDeleted)
+	_, err := repository.Delete(tasksMustBeDeleted)
 	if err != nil {
 		log.Fatal(err, "Error while delete")
 	}

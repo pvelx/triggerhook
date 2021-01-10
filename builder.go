@@ -40,6 +40,7 @@ func Build(config Config) contracts.TasksDeferredInterface {
 	taskManager := task_manager.New(
 		repositoryService,
 		errorService,
+		monitoringService,
 		&config.TaskManagerOptions,
 	)
 
@@ -54,6 +55,7 @@ func Build(config Config) contracts.TasksDeferredInterface {
 		preloaderService.GetPreloadedChan(),
 		monitoringService,
 		taskManager,
+		errorService,
 		&config.WaitingServiceOptions,
 	)
 

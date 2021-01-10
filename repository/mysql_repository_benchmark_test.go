@@ -75,7 +75,7 @@ func benchmarkDelete(countTaskToDeleteAtOnce int, b *testing.B) {
 			taskBunches = taskBunches[1:]
 			mu.Unlock()
 			b.StartTimer()
-			if err := repository.Delete(taskBunch); err != nil {
+			if _, err := repository.Delete(taskBunch); err != nil {
 				log.Fatal(err)
 			}
 		}

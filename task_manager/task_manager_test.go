@@ -59,7 +59,7 @@ func TestTaskManager_Delete(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			countCallMethodOfRepository := 0
-			r := &repository.RepositoryMock{DeleteMock: func(tasks []domain.Task) (err error) {
+			r := &repository.RepositoryMock{DeleteMock: func(tasks []domain.Task) (affected int64, err error) {
 				err = test.inputErrorRepository[countCallMethodOfRepository]
 				countCallMethodOfRepository++
 
@@ -73,7 +73,7 @@ func TestTaskManager_Delete(t *testing.T) {
 				countCallNewOfEventHandler++
 			}}
 
-			tm := New(r, eeh, nil)
+			tm := New(r, eeh, nil, nil)
 
 			result := tm.Delete(util.NewId())
 
@@ -136,7 +136,7 @@ func TestTaskManager_Create(t *testing.T) {
 				countCallNewOfEventHandler++
 			}}
 
-			tm := New(r, eeh, nil)
+			tm := New(r, eeh, nil, nil)
 
 			result := tm.Create(&domain.Task{}, true)
 
@@ -185,7 +185,7 @@ func TestTaskManager_ConfirmExecution(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			countCallMethodOfRepository := 0
-			r := &repository.RepositoryMock{DeleteMock: func(tasks []domain.Task) (err error) {
+			r := &repository.RepositoryMock{DeleteMock: func(tasks []domain.Task) (affected int64, err error) {
 				err = test.inputErrorRepository[countCallMethodOfRepository]
 				countCallMethodOfRepository++
 
@@ -199,7 +199,7 @@ func TestTaskManager_ConfirmExecution(t *testing.T) {
 				countCallNewOfEventHandler++
 			}}
 
-			tm := New(r, eeh, nil)
+			tm := New(r, eeh, nil, nil)
 
 			result := tm.ConfirmExecution([]domain.Task{{}, {}, {}})
 
@@ -285,7 +285,7 @@ func TestTaskManagerMock_GetTasksToComplete(t *testing.T) {
 				countCallNewOfEventHandler++
 			}}
 
-			tm := New(r, eeh, nil)
+			tm := New(r, eeh, nil, nil)
 
 			result, err := tm.GetTasksToComplete(time.Second)
 

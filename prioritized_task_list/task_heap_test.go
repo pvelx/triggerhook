@@ -11,7 +11,7 @@ import (
 
 func TestShuffleTask(t *testing.T) {
 	tasks := getShuffleTasks(int64(1e+5))
-	taskHeap := NewHeapPrioritizedTaskList([]domain.Task{})
+	taskHeap := New([]domain.Task{})
 	for _, task := range tasks {
 		taskHeap.Add(task)
 	}

@@ -11,6 +11,10 @@ import (
 */
 
 type PrioritizedTaskListInterface interface {
+	/*
+		Count of tasks in the list
+	*/
+	Len() int
 
 	/*
 		Add a task to the list based on priority
@@ -54,6 +58,7 @@ var (
 	TmErrorGetTasks            = errors.New("cannot get any tasks")
 	TmErrorCollectionsNotFound = errors.New("collections not found")
 	TmErrorDeletingTask        = errors.New("cannot delete task")
+	TmErrorTaskNotFound        = errors.New("task not found")
 )
 
 /*	--------------------------------------------------
@@ -61,9 +66,10 @@ var (
 */
 type RepositoryInterface interface {
 	Create(task domain.Task, isTaken bool) error
-	Delete(tasks []domain.Task) error
+	Delete(tasks []domain.Task) (int64, error)
 	FindBySecToExecTime(preloadingTimeRange time.Duration) (CollectionsInterface, error)
 	Up() error
+	Count() (int, error)
 }
 
 type CollectionsInterface interface {
@@ -71,15 +77,16 @@ type CollectionsInterface interface {
 }
 
 var (
-	FailCreatingTask = errors.New("creating the task was fail")
-	FailDeletingTask = errors.New("deleting the task was fail")
-	FailGettingTasks = errors.New("getting the tasks were fail")
-	FailFindingTasks = errors.New("finding the tasks were fail")
-	NoTasksFound     = errors.New("no tasks found")
-	NoCollections    = errors.New("collections are over")
-	TaskExist        = errors.New("task with the uuid already exist")
-	Deadlock         = errors.New("deadlock, please retry")
-	FailSchemaSetup  = errors.New("schema setup failed")
+	FailCountingTasks = errors.New("counting the task was fail")
+	FailCreatingTask  = errors.New("creating the task was fail")
+	FailDeletingTask  = errors.New("deleting the task was fail")
+	FailGettingTasks  = errors.New("getting the tasks were fail")
+	FailFindingTasks  = errors.New("finding the tasks were fail")
+	NoTasksFound      = errors.New("no tasks found")
+	NoCollections     = errors.New("collections are over")
+	TaskExist         = errors.New("task with the uuid already exist")
+	Deadlock          = errors.New("deadlock, please retry")
+	FailSchemaSetup   = errors.New("schema setup failed")
 )
 
 /*	--------------------------------------------------
@@ -161,12 +168,17 @@ const (
 		Measures the number of elements in a time period
 	*/
 	VelocityMetricType
+
+	/*
+		Measures the number of elements in a time period
+	*/
+	IntegralMetricType
 )
 
 var (
-	NoTopic      = errors.New("such topic does not exist")
-	TopicExist   = errors.New("the topic exist")
-	NoSubscribes = errors.New("subscribers of the topic do not exist")
+	TopicIsNotInitialized    = errors.New("the topic is not initialized")
+	TopicExist               = errors.New("the topic exist")
+	IncorrectMeasurementType = errors.New("incorrect measurement type")
 )
 
 type MeasurementEvent struct {
@@ -186,7 +198,12 @@ type MonitoringInterface interface {
 	/*
 		Publishing measurement events
 	*/
-	Pub(topic Topic, measurement int64) error
+	Publish(topic Topic, measurement int64) error
+
+	/*
+		Listening to the measurement with periodMeasure
+	*/
+	Listen(topic Topic, measurement interface{}) error
 
 	/*
 		Launch monitoring
@@ -197,6 +214,42 @@ type MonitoringInterface interface {
 /*	--------------------------------------------------
 	Trigger hook interface
 */
+
+var (
+	/*
+		Number of tasks waiting for confirmation after sending
+	*/
+	WaitingForConfirmation Topic = "waitingForConfirmation"
+
+	/*
+		The rate of confirmation of the sending task
+	*/
+	SpeedOfConfirmation Topic = "speedOfConfirmation"
+
+	/*
+		Number of tasks waiting to be sent
+	*/
+	Preloaded Topic = "preloaded"
+
+	/*
+		Speed of preloading
+	*/
+	SpeedOfPreloading Topic = "speedOfPreloading"
+
+	/*
+		Tasks ready to send
+	*/
+	CountOfWaitingForSending Topic = "countOfWaitingForSending"
+
+	SpeedOfCreating Topic = "speedOfCreating"
+
+	SpeedOfDeleting Topic = "speedOfDeleting"
+
+	SpeedOfSending Topic = "speedOfSending"
+
+	CountOfAllTasks Topic = "countOfAllTasks"
+)
+
 type TasksDeferredInterface interface {
 	Create(task *domain.Task) error
 

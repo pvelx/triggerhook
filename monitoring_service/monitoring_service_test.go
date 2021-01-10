@@ -74,7 +74,7 @@ func TestMainFlow(t *testing.T) {
 				go func() {
 					<-blockCh
 					for _, measure := range test.inputMeasurement {
-						if err := monitoringService.Pub(topicName, measure); err != nil {
+						if err := monitoringService.Publish(topicName, measure); err != nil {
 							t.Fatal(err)
 						}
 						time.Sleep(test.periodInputPub)

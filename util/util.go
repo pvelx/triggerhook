@@ -13,3 +13,12 @@ func IsIdValid(id string) bool {
 
 	return true
 }
+
+func Contains(s []error, e error) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
+}

@@ -6,7 +6,7 @@ import (
 	"github.com/pvelx/triggerHook/domain"
 )
 
-func NewHeapPrioritizedTaskList(tasks []domain.Task) contracts.PrioritizedTaskListInterface {
+func New(tasks []domain.Task) contracts.PrioritizedTaskListInterface {
 	pq := items{}
 	var index = make(map[string]int)
 	i := 0
@@ -53,4 +53,8 @@ func (tqh *heapPrioritizedTaskList) Take() *domain.Task {
 		return &task
 	}
 	return nil
+}
+
+func (tqh *heapPrioritizedTaskList) Len() int {
+	return tqh.pq.Len()
 }

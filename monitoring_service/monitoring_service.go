@@ -3,6 +3,7 @@ package monitoring_service
 import (
 	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerHook/contracts"
+	"reflect"
 	"time"
 )
 
@@ -63,17 +64,20 @@ type Monitoring struct {
 }
 
 func (m *Monitoring) Init(topic contracts.Topic, calcType contracts.MetricType) error {
+
+	if _, ok := m.metrics[topic]; ok {
+		return contracts.TopicExist
+	}
+
 	var metric MetricInterface
 
 	switch calcType {
+	case contracts.IntegralMetricType:
+		metric = &IntegralMetric{}
 	case contracts.VelocityMetricType:
 		metric = &VelocityMetric{}
 	case contracts.ValueMetricType:
 		metric = &ValueMetric{}
-	}
-
-	if _, ok := m.metrics[topic]; ok {
-		return contracts.TopicExist
 	}
 
 	m.metrics[topic] = metric
@@ -81,18 +85,52 @@ func (m *Monitoring) Init(topic contracts.Topic, calcType contracts.MetricType) 
 	return nil
 }
 
-func (m *Monitoring) Pub(topic contracts.Topic, measure int64) error {
-
-	if _, ok := m.subscriptionChs[topic]; !ok {
-		return contracts.NoSubscribes
-	}
-
+func (m *Monitoring) Publish(topic contracts.Topic, measurement int64) error {
 	metric, ok := m.metrics[topic]
 	if !ok {
-		return contracts.NoTopic
+		return contracts.TopicIsNotInitialized
 	}
 
-	metric.Set(measure)
+	metric.Set(measurement)
+
+	return nil
+}
+
+func (m *Monitoring) Listen(topic contracts.Topic, measurement interface{}) error {
+
+	if _, ok := m.metrics[topic]; ok {
+		return contracts.TopicExist
+	}
+	metric := &ValueMetric{}
+	m.metrics[topic] = metric
+
+	var convert func(interface{}) int64
+	switch reflect.TypeOf(measurement).Kind() {
+	case
+		reflect.Array,
+		reflect.Chan,
+		reflect.Map,
+		reflect.Slice:
+		convert = func(i interface{}) int64 {
+			return int64(reflect.ValueOf(i).Len())
+		}
+
+	case
+		reflect.Int,
+		reflect.Int32,
+		reflect.Int64:
+		convert = func(i interface{}) int64 {
+			return reflect.ValueOf(i).Int()
+		}
+
+	default:
+		return contracts.IncorrectMeasurementType
+	}
+
+	go func() {
+		metric.Set(convert(measurement))
+		time.Sleep(m.periodMeasure)
+	}()
 
 	return nil
 }

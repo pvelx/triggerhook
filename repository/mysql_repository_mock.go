@@ -13,7 +13,7 @@ type RepositoryMock struct {
 		You need to substitute *Mock methods to do substitute original functions
 	*/
 	CreateMock              func(task domain.Task, isTaken bool) error
-	DeleteMock              func(tasks []domain.Task) error
+	DeleteMock              func(tasks []domain.Task) (int64, error)
 	FindBySecToExecTimeMock func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error)
 	UpMock                  func() error
 }
@@ -22,7 +22,7 @@ func (r *RepositoryMock) Create(task domain.Task, isTaken bool) error {
 	return r.CreateMock(task, isTaken)
 }
 
-func (r *RepositoryMock) Delete(tasks []domain.Task) (error error) {
+func (r *RepositoryMock) Delete(tasks []domain.Task) (int64, error) {
 	return r.DeleteMock(tasks)
 }
 

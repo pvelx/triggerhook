@@ -27,10 +27,6 @@ func New(
 	options *Options,
 ) contracts.PreloadingTaskServiceInterface {
 
-	//if err := monitoring.Init("", contracts.ValueMetricType); err != nil {
-	//	panic(err)
-	//}
-
 	if options == nil {
 		options = &Options{}
 	}
@@ -47,10 +43,22 @@ func New(
 		panic(err)
 	}
 
+	chPreloadedTask := make(chan domain.Task, options.ChPreloadedTaskCap)
+
+	if err := monitoring.Listen(contracts.CountOfWaitingForSending, chPreloadedTask); err != nil {
+		panic(err)
+	}
+	if err := monitoring.Init(contracts.SpeedOfCreating, contracts.VelocityMetricType); err != nil {
+		panic(err)
+	}
+	if err := monitoring.Init(contracts.SpeedOfPreloading, contracts.VelocityMetricType); err != nil {
+		panic(err)
+	}
+
 	return &preloadingTaskService{
 		taskManager:              taskManager,
 		eh:                       eventErrorHandler,
-		chPreloadedTask:          make(chan domain.Task, options.ChPreloadedTaskCap),
+		chPreloadedTask:          chPreloadedTask,
 		timePreload:              options.TimePreload,
 		coefTimePreloadOfNewTask: options.CoefTimePreloadOfNewTask,
 		taskNumberInOneSearch:    options.TaskNumberInOneSearch,
@@ -84,6 +92,10 @@ func (s *preloadingTaskService) AddNewTask(task *domain.Task) error {
 
 	if isTaken {
 		s.chPreloadedTask <- *task
+	}
+
+	if err := s.monitoring.Publish(contracts.SpeedOfCreating, 1); err != nil {
+		s.eh.New(contracts.LevelError, err.Error(), nil)
 	}
 
 	return nil
@@ -141,6 +153,10 @@ func (s *preloadingTaskService) getBunchOfTask(wg *sync.WaitGroup, result contra
 			"tasks count": len(tasks),
 			"worker":      worker,
 		})
+
+		if err := s.monitoring.Publish(contracts.SpeedOfPreloading, int64(len(tasks))); err != nil {
+			s.eh.New(contracts.LevelError, err.Error(), nil)
+		}
 
 		for _, task := range tasks {
 			s.chPreloadedTask <- task

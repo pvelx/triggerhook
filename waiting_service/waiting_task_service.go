@@ -19,6 +19,7 @@ func New(
 	chPreloadedTasks <-chan domain.Task,
 	monitoring contracts.MonitoringInterface,
 	taskManager contracts.TaskManagerInterface,
+	eventHandler contracts.EventErrorHandlerInterface,
 	options *Options,
 ) contracts.WaitingTaskServiceInterface {
 
@@ -33,18 +34,24 @@ func New(
 		panic(err)
 	}
 
-	//if err := monitoring.Init("", contracts.ValueMetricType); err != nil {
-	//	panic(err)
-	//}
+	tasksWaitingList := prioritized_task_list.New([]domain.Task{})
+
+	if err := monitoring.Listen(contracts.Preloaded, tasksWaitingList.Len()); err != nil {
+		panic(err)
+	}
+	if err := monitoring.Init(contracts.SpeedOfDeleting, contracts.VelocityMetricType); err != nil {
+		panic(err)
+	}
 
 	service := &waitingTaskService{
-		tasksWaitingList:   prioritized_task_list.NewHeapPrioritizedTaskList([]domain.Task{}),
+		tasksWaitingList:   tasksWaitingList,
 		chPreloadedTasks:   chPreloadedTasks,
 		chCanceledTasks:    make(chan string, options.ChCanceledTasksCap),
 		chTasksReadyToSend: make(chan domain.Task, options.ChTasksReadyToSendCap),
 		mu:                 &sync.Mutex{},
 		monitoring:         monitoring,
 		taskManager:        taskManager,
+		eeh:                eventHandler,
 	}
 
 	return service
@@ -58,6 +65,7 @@ type waitingTaskService struct {
 	mu                 *sync.Mutex
 	monitoring         contracts.MonitoringInterface
 	taskManager        contracts.TaskManagerInterface
+	eeh                contracts.EventErrorHandlerInterface
 }
 
 func (s *waitingTaskService) GetReadyToSendChan() <-chan domain.Task {
@@ -87,6 +95,10 @@ func (s *waitingTaskService) CancelIfExist(taskId string) error {
 		return err
 	}
 	s.chCanceledTasks <- taskId
+
+	if err := s.monitoring.Publish(contracts.SpeedOfDeleting, 1); err != nil {
+		s.eeh.New(contracts.LevelError, err.Error(), nil)
+	}
 
 	return nil
 }

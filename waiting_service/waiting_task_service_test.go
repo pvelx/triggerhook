@@ -20,7 +20,7 @@ func taskBunch(execTime int64, count int) []domain.Task {
 func Test(t *testing.T) {
 	chPreloadedTask := make(chan domain.Task, 10000)
 	chTasksReadyToSend := make(chan domain.Task, 10000)
-	waitingTaskService := New(chPreloadedTask, nil, nil, nil)
+	waitingTaskService := New(chPreloadedTask, nil, nil, nil, nil)
 	countOfTasksOnSameTime := 1000
 	countOfSeconds := 10
 	var pauseSec float32 = 0.5

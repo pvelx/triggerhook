@@ -1,7 +1,6 @@
 package sender_service
 
 import (
-	"fmt"
 	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
@@ -42,9 +41,15 @@ func New(
 		panic(err)
 	}
 
-	//if err := monitoring.Init("", contracts.ValueMetricType); err != nil {
-	//	panic(err)
-	//}
+	if err := monitoring.Init(contracts.SpeedOfConfirmation, contracts.VelocityMetricType); err != nil {
+		panic(err)
+	}
+	if err := monitoring.Init(contracts.SpeedOfSending, contracts.VelocityMetricType); err != nil {
+		panic(err)
+	}
+	if err := monitoring.Init(contracts.WaitingForConfirmation, contracts.IntegralMetricType); err != nil {
+		panic(err)
+	}
 
 	return &taskSender{
 		sendByExternalTransport:  options.Transport,
@@ -85,6 +90,9 @@ func (s *taskSender) Run() {
 	for task := range s.chTasksReadyToSend {
 		s.sendByExternalTransport(task)
 		s.chTasksToConfirm <- task
+		if err := s.monitoring.Publish(contracts.SpeedOfSending, 1); err != nil {
+			s.eeh.New(contracts.LevelError, err.Error(), nil)
+		}
 	}
 }
 
@@ -95,7 +103,17 @@ func (s *taskSender) confirmBatch(batchTasksCh chan []domain.Task) {
 				if err := s.taskManager.ConfirmExecution(batch); err != nil {
 					s.eeh.New(contracts.LevelFatal, err.Error(), nil)
 				}
-				s.eeh.New(contracts.LevelDebug, fmt.Sprintf("confirmed %d tasks", len(batch)), nil)
+
+				s.eeh.New(contracts.LevelDebug, "confirmed tasks", map[string]interface{}{
+					"count of task": len(batch),
+				})
+
+				if err := s.monitoring.Publish(contracts.WaitingForConfirmation, int64(-len(batch))); err != nil {
+					s.eeh.New(contracts.LevelError, err.Error(), nil)
+				}
+				if err := s.monitoring.Publish(contracts.SpeedOfConfirmation, int64(len(batch))); err != nil {
+					s.eeh.New(contracts.LevelError, err.Error(), nil)
+				}
 			}
 		}()
 	}
@@ -124,6 +142,13 @@ func (s *taskSender) generateBatch(tasks <-chan domain.Task, maxItems int, maxTi
 		done:
 			if len(batch) > 0 {
 				batches <- batch
+
+				if err := s.monitoring.Publish(contracts.WaitingForConfirmation, int64(len(batch))); err != nil {
+					s.eeh.New(contracts.LevelError, err.Error(), nil)
+				}
+				if len(batches) == cap(batches) {
+					s.eeh.New(contracts.LevelError, "channel is full", nil)
+				}
 			}
 		}
 	}()

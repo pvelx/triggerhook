@@ -65,6 +65,17 @@ type mysqlRepository struct {
 	options           *Options
 }
 
+func (r *mysqlRepository) Count() (int, error) {
+	var count int
+	if err := r.client.QueryRow("SELECT count(*) FROM task").Scan(&count); err != nil {
+		r.eer.New(contracts.LevelError, err.Error(), nil)
+
+		return 0, contracts.FailCountingTasks
+	}
+
+	return count, nil
+}
+
 func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 	createTaskQuery := "CALL create_task(?, ?, ?, ?, ?)"
 	args := []interface{}{
@@ -95,10 +106,10 @@ func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 	return nil
 }
 
-func (r *mysqlRepository) Delete(tasks []domain.Task) (error error) {
+func (r *mysqlRepository) Delete(tasks []domain.Task) (int64, error) {
 	//fmt.Println(fmt.Sprintf("DEBUG Repository Delete: start deleting %d tasks", len(tasks)))
 	if len(tasks) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	var args []interface{}
@@ -109,20 +120,23 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (error error) {
 	deletingTaskQuery := fmt.Sprintf("DELETE FROM task WHERE uuid IN (?%s)",
 		strings.Repeat(",?", len(tasks)-1))
 
-	if _, err := r.client.Exec(deletingTaskQuery, args...); err != nil {
-		error = contracts.FailDeletingTask
+	result, errDeleting := r.client.Exec(deletingTaskQuery, args...)
+	if errDeleting != nil {
+		errorReturn := contracts.FailDeletingTask
 
-		if err, ok := err.(*mysql.MySQLError); ok {
+		if err, ok := errDeleting.(*mysql.MySQLError); ok {
 			switch {
 			case err.Number == mysqlerr.ER_LOCK_DEADLOCK:
-				error = contracts.Deadlock
+				errorReturn = contracts.Deadlock
 			}
 		}
 
-		r.eer.New(contracts.LevelError, err.Error(), nil)
+		r.eer.New(contracts.LevelError, errDeleting.Error(), nil)
 
-		return
+		return 0, errorReturn
 	}
+
+	affected, _ := result.RowsAffected()
 
 	/*
 		Cleaning empty collections of tasks.
@@ -138,7 +152,7 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (error error) {
 		atomic.StoreInt32(&r.cleanRequestCount, 0)
 	}
 
-	return nil
+	return affected, nil
 }
 
 func (r *mysqlRepository) deleteEmptyCollections() error {
