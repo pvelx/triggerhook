@@ -5,13 +5,10 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pvelx/triggerHook/connection"
-	"github.com/pvelx/triggerHook/contracts"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/error_service"
 	"github.com/pvelx/triggerHook/sender_service"
+	"github.com/stretchr/testify/assert"
 	"log"
-	"math/rand"
-	"path"
 	"testing"
 	"time"
 )
@@ -94,45 +91,9 @@ var (
 //	os.Exit(code)
 //}
 
-var (
-	baseFormat = "%s MESSAGE:%s METHOD:%s FILE:%s:%d EXTRA:%v\n"
-	formats    = map[contracts.Level]string{
-		contracts.LevelDebug: "DEBUG:" + baseFormat,
-		contracts.LevelError: "ERROR:" + baseFormat,
-		contracts.LevelFatal: "FATAL:" + baseFormat,
-	}
-)
-
 func TestExample(t *testing.T) {
 
-	i := 0
-	transport := func(task domain.Task) {
-		i++
-		if i == 1e+4 {
-			i = 0
-			fmt.Println("Send:", task)
-		}
-	}
-
-	eventHandlers := make(map[contracts.Level]func(event contracts.EventError))
-	for level, format := range formats {
-		format := format
-		level := level
-		eventHandlers[level] = func(event contracts.EventError) {
-			_, shortMethod := path.Split(event.Method)
-			_, shortFile := path.Split(event.File)
-			fmt.Printf(
-				format,
-				event.Time.Format("2006-01-02 15:04:05.000"),
-				event.EventMessage,
-				shortMethod,
-				shortFile,
-				event.Line,
-				event.Extra,
-			)
-		}
-	}
-
+	actualAllTasksCount := 0
 	triggerHook := Build(Config{
 		Connection: connection.Options{
 			User:     "root",
@@ -140,32 +101,55 @@ func TestExample(t *testing.T) {
 			Host:     "127.0.0.1:3306",
 			DbName:   "test_db",
 		},
-		ErrorServiceOptions: error_service.Options{
-			Debug:         false,
-			EventHandlers: eventHandlers,
-		},
 		SenderServiceOptions: sender_service.Options{
-			Transport: transport,
+			Transport: func(task domain.Task) {
+				actualAllTasksCount++
+				assert.Equal(t, time.Now().Unix(), task.ExecTime,
+					"time exec of the task is not current time")
+			},
 		},
 	})
 
-	rand.Seed(time.Now().UnixNano())
+	go func() {
+		if err := triggerHook.Run(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	//it takes time for run trigger hook
+	time.Sleep(time.Second)
 
-	for w := 0; w < 10; w++ {
+	inputData := []struct {
+		tasksCount       int
+		relativeExecTime int64
+	}{
+		{100, -2},
+		{200, 0},
+		{210, 1},
+		{220, 5},
+		{230, 7},
+		{240, 10},
+		{250, 12},
+	}
+	expectedAllTasksCount := 0
+
+	for _, current := range inputData {
+		expectedAllTasksCount = expectedAllTasksCount + current.tasksCount
+		current := current
 		go func() {
-			for {
-				randomExecTime := time.Now().Add(time.Duration(rand.Intn(300)) * time.Second).Unix()
-				err := triggerHook.Create(&domain.Task{
-					ExecTime: randomExecTime,
-				})
-				if err != nil {
+			for i := 0; i < current.tasksCount; i++ {
+				execTime := time.Now().Add(time.Duration(current.relativeExecTime) * time.Second).Unix()
+				if err := triggerHook.Create(&domain.Task{
+					ExecTime: execTime,
+				}); err != nil {
 					fmt.Println(err)
+					t.Fatal(err)
 				}
 			}
 		}()
 	}
 
-	if err := triggerHook.Run(); err != nil {
-		log.Fatal(err)
-	}
+	// it takes time to process the most deferred tasks
+	time.Sleep(13 * time.Second)
+
+	assert.Equal(t, expectedAllTasksCount, actualAllTasksCount, "count tasks is not correct")
 }

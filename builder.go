@@ -27,6 +27,7 @@ type Config struct {
 func Build(config Config) contracts.TasksDeferredInterface {
 
 	errorService := error_service.New(&config.ErrorServiceOptions)
+	monitoringService := monitoring_service.New(&config.MonitoringServiceOptions)
 
 	repositoryService := repository.New(
 		connection.NewMysqlClient(config.Connection),
@@ -34,8 +35,6 @@ func Build(config Config) contracts.TasksDeferredInterface {
 		errorService,
 		&config.RepositoryOptions,
 	)
-
-	monitoringService := monitoring_service.New(&config.MonitoringServiceOptions)
 
 	taskManager := task_manager.New(
 		repositoryService,

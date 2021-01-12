@@ -4,18 +4,27 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/imdario/mergo"
 )
 
 type Options struct {
-	User            string
-	Password        string
-	Host            string
-	DbName          string
-	SetMaxIdleConns int
-	SetMaxOpenConns int
+	User         string
+	Password     string
+	Host         string
+	DbName       string
+	MaxIdleConns int
+	MaxOpenConns int
 }
 
 func NewMysqlClient(options Options) *sql.DB {
+
+	if err := mergo.Merge(&options, Options{
+		MaxOpenConns: 25,
+		MaxIdleConns: 25,
+	}); err != nil {
+		panic(err)
+	}
+
 	dataSourceName := fmt.Sprintf(
 		"%s:%s@tcp(%s)/%s?charset=utf8",
 		options.User,
@@ -32,12 +41,12 @@ func NewMysqlClient(options Options) *sql.DB {
 		panic(err)
 	}
 
-	if options.SetMaxIdleConns > 0 {
-		Client.SetMaxIdleConns(options.SetMaxIdleConns)
+	if options.MaxIdleConns > 0 {
+		Client.SetMaxIdleConns(options.MaxIdleConns)
 	}
 
-	if options.SetMaxOpenConns > 0 {
-		Client.SetMaxOpenConns(options.SetMaxOpenConns)
+	if options.MaxOpenConns > 0 {
+		Client.SetMaxOpenConns(options.MaxOpenConns)
 	}
 
 	return Client

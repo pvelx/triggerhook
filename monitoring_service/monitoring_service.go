@@ -3,7 +3,6 @@ package monitoring_service
 import (
 	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerHook/contracts"
-	"reflect"
 	"time"
 )
 
@@ -96,7 +95,7 @@ func (m *Monitoring) Publish(topic contracts.Topic, measurement int64) error {
 	return nil
 }
 
-func (m *Monitoring) Listen(topic contracts.Topic, measurement interface{}) error {
+func (m *Monitoring) Listen(topic contracts.Topic, callback func() int64) error {
 
 	if _, ok := m.metrics[topic]; ok {
 		return contracts.TopicExist
@@ -104,32 +103,11 @@ func (m *Monitoring) Listen(topic contracts.Topic, measurement interface{}) erro
 	metric := &ValueMetric{}
 	m.metrics[topic] = metric
 
-	var convert func(interface{}) int64
-	switch reflect.TypeOf(measurement).Kind() {
-	case
-		reflect.Array,
-		reflect.Chan,
-		reflect.Map,
-		reflect.Slice:
-		convert = func(i interface{}) int64 {
-			return int64(reflect.ValueOf(i).Len())
-		}
-
-	case
-		reflect.Int,
-		reflect.Int32,
-		reflect.Int64:
-		convert = func(i interface{}) int64 {
-			return reflect.ValueOf(i).Int()
-		}
-
-	default:
-		return contracts.IncorrectMeasurementType
-	}
-
 	go func() {
-		metric.Set(convert(measurement))
-		time.Sleep(m.periodMeasure)
+		for {
+			metric.Set(callback())
+			time.Sleep(m.periodMeasure)
+		}
 	}()
 
 	return nil

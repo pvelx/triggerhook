@@ -203,7 +203,7 @@ type MonitoringInterface interface {
 	/*
 		Listening to the measurement with periodMeasure
 	*/
-	Listen(topic Topic, measurement interface{}) error
+	Listen(topic Topic, callback func() int64) error
 
 	/*
 		Launch monitoring

@@ -45,7 +45,9 @@ func New(
 
 	chPreloadedTask := make(chan domain.Task, options.ChPreloadedTaskCap)
 
-	if err := monitoring.Listen(contracts.CountOfWaitingForSending, chPreloadedTask); err != nil {
+	if err := monitoring.Listen(contracts.CountOfWaitingForSending, func() int64 {
+		return int64(len(chPreloadedTask))
+	}); err != nil {
 		panic(err)
 	}
 	if err := monitoring.Init(contracts.SpeedOfCreating, contracts.VelocityMetricType); err != nil {

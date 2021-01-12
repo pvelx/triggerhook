@@ -36,7 +36,9 @@ func New(
 
 	tasksWaitingList := prioritized_task_list.New([]domain.Task{})
 
-	if err := monitoring.Listen(contracts.Preloaded, tasksWaitingList.Len()); err != nil {
+	if err := monitoring.Listen(contracts.Preloaded, func() int64 {
+		return int64(tasksWaitingList.Len())
+	}); err != nil {
 		panic(err)
 	}
 	if err := monitoring.Init(contracts.SpeedOfDeleting, contracts.VelocityMetricType); err != nil {
