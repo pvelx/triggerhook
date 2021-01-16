@@ -6,7 +6,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pvelx/triggerHook/connection"
 	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/sender_service"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"testing"
@@ -101,14 +100,18 @@ func TestExample(t *testing.T) {
 			Host:     "127.0.0.1:3306",
 			DbName:   "test_db",
 		},
-		SenderServiceOptions: sender_service.Options{
-			Transport: func(task domain.Task) {
-				actualAllTasksCount++
-				assert.Equal(t, time.Now().Unix(), task.ExecTime,
-					"time exec of the task is not current time")
-			},
-		},
 	})
+
+	go func() {
+		for {
+			result := triggerHook.Consume()
+			task := result.Task()
+
+			actualAllTasksCount++
+			assert.Equal(t, time.Now().Unix(), task.ExecTime, "time exec of the task is not current time")
+			result.Confirm()
+		}
+	}()
 
 	go func() {
 		if err := triggerHook.Run(); err != nil {

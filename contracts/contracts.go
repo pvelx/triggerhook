@@ -38,6 +38,13 @@ type PrioritizedTaskListInterface interface {
 
 type TaskSenderInterface interface {
 	Run()
+	Consume() TaskToSendInterface
+}
+
+type TaskToSendInterface interface {
+	Confirm()
+	Rollback()
+	Task() domain.Task
 }
 
 /*	--------------------------------------------------
@@ -103,7 +110,7 @@ type PreloadingTaskServiceInterface interface {
 */
 type WaitingTaskServiceInterface interface {
 	CancelIfExist(taskId string) error
-	GetReadyToSendChan() <-chan domain.Task
+	GetReadyToSendChan() chan domain.Task
 	Run()
 }
 
@@ -170,15 +177,14 @@ const (
 	VelocityMetricType
 
 	/*
-		Measures the number of elements in a time period
-	*/
+
+	 */
 	IntegralMetricType
 )
 
 var (
-	TopicIsNotInitialized    = errors.New("the topic is not initialized")
-	TopicExist               = errors.New("the topic exist")
-	IncorrectMeasurementType = errors.New("incorrect measurement type")
+	TopicIsNotInitialized = errors.New("the topic is not initialized")
+	TopicExist            = errors.New("the topic exist")
 )
 
 type MeasurementEvent struct {
@@ -254,6 +260,8 @@ type TasksDeferredInterface interface {
 	Create(task *domain.Task) error
 
 	Delete(taskId string) error
+
+	Consume() TaskToSendInterface
 
 	/*
 		LAUNCHER TRIGGER HOOK :) !!!

@@ -63,7 +63,7 @@ func Build(config Config) contracts.TasksDeferredInterface {
 		waitingService.GetReadyToSendChan(),
 		errorService,
 		monitoringService,
-		config.SenderServiceOptions,
+		&config.SenderServiceOptions,
 	)
 
 	return New(

@@ -8,10 +8,6 @@ import (
 )
 
 type Options struct {
-	/*
-		Setting the function with the desired message sending method (for example, RabbitMQ)
-	*/
-	Transport                func(task domain.Task)
 	BatchMaxItems            int
 	BatchTimeout             time.Duration
 	ChTasksToConfirmCap      int
@@ -21,17 +17,17 @@ type Options struct {
 
 func New(
 	taskManager contracts.TaskManagerInterface,
-	chTasksReadyToSend <-chan domain.Task,
+	chTasksReadyToSend chan domain.Task,
 	eeh contracts.EventErrorHandlerInterface,
 	monitoring contracts.MonitoringInterface,
-	options Options,
+	options *Options,
 ) contracts.TaskSenderInterface {
 
-	if options.Transport == nil {
-		panic("You have to define a transport for sending tasks")
+	if options == nil {
+		options = &Options{}
 	}
 
-	if err := mergo.Merge(&options, Options{
+	if err := mergo.Merge(options, Options{
 		BatchMaxItems:            1000,
 		BatchTimeout:             50 * time.Millisecond,
 		ChTasksToConfirmCap:      10000000,
@@ -41,7 +37,8 @@ func New(
 		panic(err)
 	}
 
-	if err := monitoring.Init(contracts.SpeedOfConfirmation, contracts.VelocityMetricType); err != nil {
+	err := monitoring.Init(contracts.SpeedOfConfirmation, contracts.VelocityMetricType)
+	if err != nil {
 		panic(err)
 	}
 	if err := monitoring.Init(contracts.SpeedOfSending, contracts.VelocityMetricType); err != nil {
@@ -52,7 +49,6 @@ func New(
 	}
 
 	return &taskSender{
-		sendByExternalTransport:  options.Transport,
 		taskManager:              taskManager,
 		chTasksToConfirm:         make(chan domain.Task, options.ChTasksToConfirmCap),
 		chTasksReadyToSend:       chTasksReadyToSend,
@@ -67,8 +63,7 @@ func New(
 
 type taskSender struct {
 	contracts.TaskSenderInterface
-	sendByExternalTransport  func(task domain.Task)
-	chTasksReadyToSend       <-chan domain.Task
+	chTasksReadyToSend       chan domain.Task
 	chTasksToConfirm         chan domain.Task
 	taskManager              contracts.TaskManagerInterface
 	eeh                      contracts.EventErrorHandlerInterface
@@ -80,24 +75,9 @@ type taskSender struct {
 }
 
 func (s *taskSender) Run() {
-	if s.sendByExternalTransport == nil {
-		panic("Transport for sending was not added")
-	}
-	batchTasksCh := s.generateBatch(s.chTasksToConfirm, s.batchMaxItems, s.batchTimeout)
+	batchTasksCh := s.generateBatch(s.chTasksToConfirm)
 
-	go s.confirmBatch(batchTasksCh)
-
-	for task := range s.chTasksReadyToSend {
-		s.sendByExternalTransport(task)
-		s.chTasksToConfirm <- task
-		if err := s.monitoring.Publish(contracts.SpeedOfSending, 1); err != nil {
-			s.eeh.New(contracts.LevelError, err.Error(), nil)
-		}
-	}
-}
-
-func (s *taskSender) confirmBatch(batchTasksCh chan []domain.Task) {
-	for i := 0; i < s.confirmationWorkersCount; i++ {
+	for w := 0; w < s.confirmationWorkersCount; w++ {
 		go func() {
 			for batch := range batchTasksCh {
 				if err := s.taskManager.ConfirmExecution(batch); err != nil {
@@ -119,18 +99,28 @@ func (s *taskSender) confirmBatch(batchTasksCh chan []domain.Task) {
 	}
 }
 
-func (s *taskSender) generateBatch(tasks <-chan domain.Task, maxItems int, maxTimeout time.Duration) chan []domain.Task {
+func (s *taskSender) Consume() contracts.TaskToSendInterface {
+	return &taskToSend{
+		monitoring: s.monitoring,
+		eeh:        s.eeh,
+		chRollback: s.chTasksReadyToSend,
+		chConfirm:  s.chTasksToConfirm,
+		task:       <-s.chTasksReadyToSend,
+	}
+}
+
+func (s *taskSender) generateBatch(tasks <-chan domain.Task) chan []domain.Task {
 	batches := make(chan []domain.Task, s.chBatchesCap)
 
 	go func() {
 		for {
 			var batch []domain.Task
-			expire := time.After(maxTimeout)
+			expire := time.After(s.batchTimeout)
 			for {
 				select {
 				case value := <-tasks:
 					batch = append(batch, value)
-					if len(batch) == maxItems {
+					if len(batch) == s.batchMaxItems {
 						goto done
 					}
 
@@ -154,4 +144,39 @@ func (s *taskSender) generateBatch(tasks <-chan domain.Task, maxItems int, maxTi
 	}()
 
 	return batches
+}
+
+type taskToSend struct {
+	monitoring  contracts.MonitoringInterface
+	eeh         contracts.EventErrorHandlerInterface
+	isProcessed bool
+	chConfirm   chan domain.Task
+	chRollback  chan domain.Task
+	task        domain.Task
+}
+
+func (tts *taskToSend) Task() domain.Task {
+	return tts.task
+}
+
+func (tts *taskToSend) Confirm() {
+	if !tts.isProcessed {
+		if err := tts.monitoring.Publish(contracts.SpeedOfSending, 1); err != nil {
+			tts.eeh.New(contracts.LevelError, err.Error(), nil)
+		}
+
+		tts.isProcessed = true
+		tts.chConfirm <- tts.task
+	}
+}
+
+func (tts *taskToSend) Rollback() {
+	if !tts.isProcessed {
+		if err := tts.monitoring.Publish(contracts.SpeedOfSending, -1); err != nil {
+			tts.eeh.New(contracts.LevelError, err.Error(), nil)
+		}
+
+		tts.isProcessed = true
+		tts.chRollback <- tts.task
+	}
 }

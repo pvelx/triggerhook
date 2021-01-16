@@ -38,6 +38,10 @@ func (s *triggerHook) Create(task *domain.Task) error {
 	return s.preloadingTaskService.AddNewTask(task)
 }
 
+func (s *triggerHook) Consume() contracts.TaskToSendInterface {
+	return s.senderService.Consume()
+}
+
 func (s *triggerHook) Run() error {
 	go s.preloadingTaskService.Run()
 	go s.waitingTaskService.Run()

@@ -70,7 +70,7 @@ type waitingTaskService struct {
 	eeh                contracts.EventErrorHandlerInterface
 }
 
-func (s *waitingTaskService) GetReadyToSendChan() <-chan domain.Task {
+func (s *waitingTaskService) GetReadyToSendChan() chan domain.Task {
 	return s.chTasksReadyToSend
 }
 
