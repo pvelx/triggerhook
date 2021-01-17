@@ -172,10 +172,6 @@ func (tts *taskToSend) Confirm() {
 
 func (tts *taskToSend) Rollback() {
 	if !tts.isProcessed {
-		if err := tts.monitoring.Publish(contracts.SpeedOfSending, -1); err != nil {
-			tts.eeh.New(contracts.LevelError, err.Error(), nil)
-		}
-
 		tts.isProcessed = true
 		tts.chRollback <- tts.task
 	}

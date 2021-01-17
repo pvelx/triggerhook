@@ -76,19 +76,19 @@ func (s *waitingTaskService) GetReadyToSendChan() chan domain.Task {
 
 func (s *waitingTaskService) deleteTaskFromWaitingList(taskId string) {
 	s.mu.Lock()
-	defer func() { s.mu.Unlock() }()
+	defer s.mu.Unlock()
 	s.tasksWaitingList.DeleteIfExist(taskId)
 }
 
 func (s *waitingTaskService) addTaskToWaitingList(task domain.Task) {
 	s.mu.Lock()
-	defer func() { s.mu.Unlock() }()
+	defer s.mu.Unlock()
 	s.tasksWaitingList.Add(task)
 }
 
 func (s *waitingTaskService) takeTaskFromWaitingList() *domain.Task {
 	s.mu.Lock()
-	defer func() { s.mu.Unlock() }()
+	defer s.mu.Unlock()
 	return s.tasksWaitingList.Take()
 }
 
