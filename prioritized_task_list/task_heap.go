@@ -8,15 +8,16 @@ import (
 
 func New(tasks []domain.Task) contracts.PrioritizedTaskListInterface {
 	pq := items{}
-	var index = make(map[string]int)
+	var index = make(map[string]*int)
 	i := 0
 	for _, task := range tasks {
-		pq = append(pq, &item{
+		item := &item{
 			task:     task,
 			priority: task.ExecTime,
 			index:    i,
-		})
-		index[task.Id] = i
+		}
+		pq = append(pq, item)
+		index[task.Id] = &item.index
 		i++
 	}
 	heap.Init(&pq)
@@ -27,21 +28,22 @@ func New(tasks []domain.Task) contracts.PrioritizedTaskListInterface {
 type heapPrioritizedTaskList struct {
 	contracts.PrioritizedTaskListInterface
 	pq    items
-	index map[string]int
+	index map[string]*int
 }
 
 func (tqh *heapPrioritizedTaskList) Add(task domain.Task) {
-	tqh.index[task.Id] = tqh.pq.Len()
-	heap.Push(&tqh.pq, &item{
+	item := &item{
 		task:     task,
 		priority: task.ExecTime,
-	})
+	}
+	heap.Push(&tqh.pq, item)
+	tqh.index[task.Id] = &item.index
 }
 
 func (tqh *heapPrioritizedTaskList) DeleteIfExist(taskId string) bool {
 	index, ok := tqh.index[taskId]
 	if ok {
-		heap.Remove(&tqh.pq, index)
+		heap.Remove(&tqh.pq, *index)
 	}
 
 	return ok
@@ -50,6 +52,10 @@ func (tqh *heapPrioritizedTaskList) DeleteIfExist(taskId string) bool {
 func (tqh *heapPrioritizedTaskList) Take() *domain.Task {
 	for tqh.pq.Len() > 0 {
 		task := heap.Pop(&tqh.pq).(*item).task.(domain.Task)
+		if _, ok := tqh.index[task.Id]; ok {
+			delete(tqh.index, task.Id)
+		}
+
 		return &task
 	}
 	return nil

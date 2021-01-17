@@ -33,3 +33,28 @@ func getShuffleTasks(countOfTasks int64) []domain.Task {
 
 	return tasks
 }
+
+func TestDeleteTask(t *testing.T) {
+	task1 := domain.Task{Id: util.NewId(), ExecTime: 1}
+	task2 := domain.Task{Id: util.NewId(), ExecTime: 2}
+	task3 := domain.Task{Id: util.NewId(), ExecTime: 3}
+
+	taskHeap := New([]domain.Task{})
+
+	taskHeap.Add(task1)
+	taskHeap.Add(task2)
+	taskHeap.Add(task3)
+
+	taskHeap.DeleteIfExist(util.NewId())
+
+	task := taskHeap.Take()
+	assert.Equal(t, *task, task1)
+
+	task = taskHeap.Take()
+	assert.Equal(t, *task, task2)
+
+	taskHeap.DeleteIfExist(task3.Id)
+
+	task = taskHeap.Take()
+	assert.Nil(t, task)
+}
