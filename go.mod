@@ -1,19 +1,19 @@
-module github.com/VladislavPav/trigger-hook
+module github.com/pvelx/triggerHook
 
 go 1.15
 
 require (
-	github.com/gin-gonic/gin v1.6.3
-	github.com/go-playground/validator/v10 v10.4.0 // indirect
-	github.com/gocql/gocql v0.0.0-20200926162733-393f0c961220
-	github.com/golang/protobuf v1.4.2 // indirect
-	github.com/golang/snappy v0.0.2 // indirect
-	github.com/json-iterator/go v1.1.10 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.1 // indirect
-	github.com/ugorji/go v1.1.9 // indirect
-	golang.org/x/crypto v0.0.0-20201001193750-eb9a90e9f9cb // indirect
-	golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f // indirect
-	google.golang.org/protobuf v1.25.0 // indirect
-	gopkg.in/yaml.v2 v2.3.0 // indirect
+	github.com/VividCortex/mysqlerr v0.0.0-20201215173831-4c396ae82aac
+	github.com/cheggaaa/pb/v3 v3.0.5
+	github.com/go-sql-driver/mysql v1.5.0
+	github.com/imdario/mergo v0.3.11
+	github.com/kr/pretty v0.1.0 // indirect
+	github.com/mattn/go-runewidth v0.0.9 // indirect
+	github.com/olekukonko/tablewriter v0.0.4
+	github.com/ory/dockertest/v3 v3.6.3
+	github.com/pkg/errors v0.9.1
+	github.com/satori/go.uuid v1.2.0
+	github.com/stretchr/testify v1.5.1
+	golang.org/x/sys v0.0.0-20201113233024-12cec1faf1ba // indirect
+	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 )
