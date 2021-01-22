@@ -30,7 +30,7 @@ func Build(config Config) contracts.TasksDeferredInterface {
 	monitoringService := monitoring_service.New(&config.MonitoringServiceOptions)
 
 	repositoryService := repository.New(
-		connection.NewMysqlClient(config.Connection),
+		connection.NewMysqlClient(&config.Connection),
 		util.NewId(),
 		errorService,
 		&config.RepositoryOptions,

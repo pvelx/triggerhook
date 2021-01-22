@@ -5,7 +5,11 @@ go:
 services:
   - mysql
 
+before_install:
+  - mysql -e 'CREATE DATABASE task;'
+
 script:
   - GOMAXPROCS=4 go test -v
+
 notifications:
   email: false

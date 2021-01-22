@@ -16,9 +16,17 @@ type Options struct {
 	MaxOpenConns int
 }
 
-func NewMysqlClient(options Options) *sql.DB {
+func NewMysqlClient(options *Options) *sql.DB {
 
-	if err := mergo.Merge(&options, Options{
+	if options == nil {
+		options = &Options{}
+	}
+
+	if err := mergo.Merge(options, Options{
+		Host:         "127.0.0.1:3306",
+		User:         "root",
+		Password:     "",
+		DbName:       "task",
 		MaxOpenConns: 25,
 		MaxIdleConns: 25,
 	}); err != nil {

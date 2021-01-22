@@ -11,12 +11,7 @@ import (
 )
 
 func clear() {
-	conn := connection.NewMysqlClient(connection.Options{
-		User:     "root",
-		Password: "secret",
-		Host:     "127.0.0.1:3306",
-		DbName:   "test_db",
-	})
+	conn := connection.NewMysqlClient(nil)
 	if _, err := conn.Exec("DELETE FROM task"); err != nil {
 		log.Fatal(err)
 	}

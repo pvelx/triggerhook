@@ -23,12 +23,7 @@ func upInitialState(taskCount int) {
 	fmt.Println("\nup initial state")
 	preparingBar := pb.StartNew(taskCount)
 
-	conn := connection.NewMysqlClient(connection.Options{
-		User:     "root",
-		Password: "secret",
-		Host:     "127.0.0.1:3306",
-		DbName:   "test_db",
-	})
+	conn := connection.NewMysqlClient(nil)
 	errorService := error_service.New(nil)
 	repositoryService := repository.New(conn, util.NewId(), errorService, nil)
 
