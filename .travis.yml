@@ -1,6 +1,10 @@
 language: go
 go:
   - 1.x
+
+services:
+  - mysql
+
 script:
   - GOMAXPROCS=4 go test -v
 notifications:
