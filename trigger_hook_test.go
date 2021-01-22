@@ -29,10 +29,16 @@ func TestExample(t *testing.T) {
 	go func() {
 		for {
 			result := triggerHook.Consume()
+			now := time.Now().Unix()
 			task := result.Task()
 
 			actualAllTasksCount++
-			assert.Equal(t, time.Now().Unix(), task.ExecTime, "time exec of the task is not current time")
+			if now != task.ExecTime &&
+				// an error of one second is allowed
+				now-1 != task.ExecTime {
+				assert.Fail(t, fmt.Sprintf(
+					"time exec of the task is not current time. expected:%d actual:%d", now, task.ExecTime))
+			}
 			result.Confirm()
 		}
 	}()
