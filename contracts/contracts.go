@@ -2,8 +2,9 @@ package contracts
 
 import (
 	"errors"
-	"github.com/pvelx/triggerHook/domain"
 	"time"
+
+	"github.com/pvelx/triggerhook/domain"
 )
 
 /*	--------------------------------------------------

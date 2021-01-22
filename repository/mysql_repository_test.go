@@ -22,17 +22,13 @@ import (
 )
 
 var (
-	db *sql.DB
-
-	containerName = "trigger-hook-db"
-
+	db       *sql.DB
 	dialect  = "mysql"
 	user     = "root"
-	password = "secret"
-	dbName   = "test_db"
-	port     = "3307"
+	password = ""
+	dbName   = "task"
+	port     = "3306"
 	dsn      = "%s:%s@tcp(127.0.0.1:%s)/%s?charset=utf8"
-
 	maxConn  = 25
 	idleConn = 25
 
@@ -40,55 +36,14 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	// uses a sensible default on windows (tcp/http) and linux/osx (socket)
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
-	}
-
-	var resource *dockertest.Resource
-
-	//Delete old container if one was not deleted in previous test due to fatal error
-	if err = pool.RemoveContainerByName(containerName); err != nil {
-		log.Fatalf("Does not deleted: %s", err)
-	}
-
-	opts := dockertest.RunOptions{
-		Name:       containerName,
-		Repository: "mysql",
-		Tag:        "8.0",
-		Env: []string{
-			"MYSQL_ROOT_PASSWORD=" + password,
-			"MYSQL_DATABASE=" + dbName,
-			"MYSQL_PASSWORD=" + password,
-		},
-		ExposedPorts: []string{"3306"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"3306": {
-				{HostIP: "0.0.0.0", HostPort: port},
-			},
-		},
-	}
-
-	var errRun error
-	resource, errRun = pool.RunWithOptions(&opts)
-	if errRun != nil {
-		log.Fatalf("Could not start resource: %s", err)
-	}
 
 	dsn = fmt.Sprintf(dsn, user, password, port, dbName)
 
-	if err := pool.Retry(func() error {
-		var err error
-		db, err = sql.Open(dialect, dsn)
-		if err != nil {
-			return err
-		}
-		return db.Ping()
-	}); err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
+	var err error
+	db, err = sql.Open(dialect, dsn)
+	if err != nil {
+		panic(err)
 	}
-
 	db.SetMaxIdleConns(idleConn)
 	db.SetMaxOpenConns(maxConn)
 
@@ -99,10 +54,6 @@ func TestMain(m *testing.M) {
 	}
 
 	code := m.Run()
-
-	if err := pool.Purge(resource); err != nil {
-		log.Fatalf("Could not purge resource: %s", err)
-	}
 
 	os.Exit(code)
 }
@@ -131,7 +82,6 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 
 	foundedCountOfTasks := 0
 	for worker := 0; worker < workersCount; worker++ {
-		workerNum := worker
 		go func() {
 			defer workersDone.Done()
 			<-startWorkers
@@ -145,14 +95,6 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 						log.Fatal(err, "Getting next part is fail")
 					}
 				}
-
-				t.Log(fmt.Sprintf(
-					"WorkerNum:%d get %d count of tasks. Connections - InUse:%d Idle:%d",
-					workerNum,
-					len(tasks),
-					db.Stats().InUse,
-					db.Stats().Idle,
-				))
 
 				for _, task := range tasks {
 					foundTasks <- task
@@ -177,130 +119,6 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	}
 
 	assert.Equal(t, expectedTaskCount, foundedCountOfTasks, "Count of tasks is not equal")
-}
-
-func TestParallel(t *testing.T) {
-	clear()
-
-	taskCount := 0
-	preloadingTimeRange := 5 * time.Second
-	maxCountTasksInCollection := 1000
-	cleaningFrequency := 1
-	repository := New(
-		db,
-		appInstanceId,
-		&error_service.ErrorHandlerMock{},
-		&Options{maxCountTasksInCollection, cleaningFrequency},
-	)
-
-	input := []struct {
-		tasksCount       int
-		isTaken          bool
-		relativeExecTime int64
-	}{
-		{5000, false, 0},
-		{1500, false, 0},
-		{1800, false, 1},
-		{2200, false, 2},
-		{1400, false, -6},
-		{2500, false, 0},
-		{1200, false, 1},
-		{300, false, 2},
-	}
-
-	creatingWorkerNumber := 2
-
-	for _, item := range input {
-		taskCount = taskCount + item.tasksCount*creatingWorkerNumber
-	}
-
-	for w := 0; w < creatingWorkerNumber; w++ {
-		go func() {
-			for _, item := range input {
-				for i := 0; i < item.tasksCount; i++ {
-					errCreate := repository.Create(getTaskInstance(time.Now().Unix()+item.relativeExecTime), item.isTaken)
-					if errCreate != nil {
-						log.Fatal(errCreate, "Error while create")
-					}
-				}
-			}
-		}()
-	}
-
-	tasks := make(chan domain.Task, 1000000)
-	go func() {
-		for {
-			collections, err := repository.FindBySecToExecTime(preloadingTimeRange)
-			if err == contracts.NoTasksFound {
-				time.Sleep(preloadingTimeRange)
-				continue
-			}
-			if err != nil {
-				log.Fatal(err, "Error while get tasks")
-			}
-
-			gettingWorkerNumber := 3
-			for w := 0; w < gettingWorkerNumber; w++ {
-				for {
-					collectionTasks, errNext := collections.Next()
-					if errNext != nil {
-						if errNext == contracts.NoCollections {
-							break
-						} else {
-							log.Fatal(errNext, "Getting next part is fail")
-						}
-					}
-					for _, task := range collectionTasks {
-						tasks <- task
-					}
-				}
-			}
-		}
-	}()
-
-	countDeletedTasks := 0
-	mu := sync.Mutex{}
-	deletingWorkerNumber := 3
-	wait := make(chan bool)
-	for w := 0; w < deletingWorkerNumber; w++ {
-		go func() {
-			maxItems := 1000
-			maxTimeout := time.Second
-			for {
-				var batch []domain.Task
-				expire := time.After(maxTimeout)
-				for {
-					select {
-					case value := <-tasks:
-						batch = append(batch, value)
-						if len(batch) == maxItems {
-							goto done
-						}
-
-					case <-expire:
-						goto done
-					}
-				}
-
-			done:
-				if len(batch) > 0 {
-					_, errDelete := repository.Delete(batch)
-					if errDelete != nil {
-						log.Fatal(errDelete, "Error while delete")
-					}
-					mu.Lock()
-					countDeletedTasks = countDeletedTasks + len(batch)
-					mu.Unlock()
-
-					if countDeletedTasks == taskCount {
-						close(wait)
-					}
-				}
-			}
-		}()
-	}
-
-	<-wait
 }
 
 func TestFindBySecToExecTime(t *testing.T) {
@@ -398,17 +216,10 @@ func TestCreateRaceCondition(t *testing.T) {
 	workersDone.Add(workersCount)
 	startWorkers := make(chan bool)
 	for worker := 0; worker < workersCount; worker++ {
-		workerNum := worker
 		go func() {
 			defer workersDone.Done()
 			<-startWorkers
 			for _, item := range input {
-				t.Log(fmt.Sprintf(
-					"WorkerNum:%d. Connections - InUse:%d Idle:%d",
-					workerNum,
-					db.Stats().InUse,
-					db.Stats().Idle,
-				))
 				for i := 0; i < item.tasksCount; i++ {
 					errCreate := repository.Create(getTaskInstance(now+item.relativeExecTime), item.isTaken)
 					if errCreate != nil {
