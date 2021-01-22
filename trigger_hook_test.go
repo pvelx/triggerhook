@@ -2,12 +2,13 @@ package triggerHook
 
 import (
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"testing"
 	"time"
+
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestExample(t *testing.T) {

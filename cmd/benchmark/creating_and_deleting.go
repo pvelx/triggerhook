@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pvelx/triggerHook"
-	"github.com/pvelx/triggerHook/connection"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerhook"
+	"github.com/pvelx/triggerhook/connection"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
 )
 
 func creatingAndDeleting(taskCount int) [][]string {

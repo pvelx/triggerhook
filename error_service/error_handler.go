@@ -3,9 +3,10 @@ package error_service
 import (
 	"errors"
 	"github.com/imdario/mergo"
-	"github.com/pvelx/triggerHook/contracts"
 	"runtime"
 	"time"
+
+	"github.com/pvelx/triggerhook/contracts"
 )
 
 type Options struct {

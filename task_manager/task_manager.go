@@ -1,11 +1,12 @@
 package task_manager
 
 import (
-	"github.com/imdario/mergo"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/util"
 	"time"
+
+	"github.com/imdario/mergo"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/util"
 )
 
 type Options struct {

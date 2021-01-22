@@ -1,15 +1,16 @@
 package sender_service
 
 import (
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/error_service"
-	"github.com/pvelx/triggerHook/monitoring_service"
-	"github.com/pvelx/triggerHook/task_manager"
-	"github.com/pvelx/triggerHook/util"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/error_service"
+	"github.com/pvelx/triggerhook/monitoring_service"
+	"github.com/pvelx/triggerhook/task_manager"
+	"github.com/pvelx/triggerhook/util"
+	"github.com/stretchr/testify/assert"
 )
 
 func createTasks(chTaskReadyToSend chan domain.Task, count int) {

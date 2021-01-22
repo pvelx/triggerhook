@@ -1,9 +1,10 @@
 package repository
 
 import (
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
 	"time"
+
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
 )
 
 type RepositoryMock struct {

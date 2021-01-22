@@ -2,8 +2,9 @@ package monitoring_service
 
 import (
 	"github.com/imdario/mergo"
-	"github.com/pvelx/triggerHook/contracts"
 	"time"
+
+	"github.com/pvelx/triggerhook/contracts"
 )
 
 type MetricInterface interface {

@@ -1,14 +1,15 @@
 package task_manager
 
 import (
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/error_service"
-	"github.com/pvelx/triggerHook/repository"
-	"github.com/pvelx/triggerHook/util"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/error_service"
+	"github.com/pvelx/triggerhook/repository"
+	"github.com/pvelx/triggerhook/util"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTaskManager_Delete(t *testing.T) {

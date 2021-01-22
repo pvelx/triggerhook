@@ -2,9 +2,10 @@ package error_service
 
 import (
 	"errors"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSendEvent(t *testing.T) {

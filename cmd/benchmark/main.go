@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/olekukonko/tablewriter"
-	"github.com/pvelx/triggerHook/connection"
+	"github.com/pvelx/triggerhook/connection"
 )
 
 func clear() {

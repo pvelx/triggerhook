@@ -2,16 +2,17 @@ package preloader_service
 
 import (
 	"fmt"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/error_service"
-	"github.com/pvelx/triggerHook/repository"
-	"github.com/pvelx/triggerHook/task_manager"
-	"github.com/pvelx/triggerHook/util"
-	"github.com/stretchr/testify/assert"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/error_service"
+	"github.com/pvelx/triggerhook/repository"
+	"github.com/pvelx/triggerhook/task_manager"
+	"github.com/pvelx/triggerhook/util"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTaskAdding(t *testing.T) {

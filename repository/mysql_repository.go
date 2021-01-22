@@ -4,16 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/VividCortex/mysqlerr"
-	"github.com/go-sql-driver/mysql"
-	"github.com/imdario/mergo"
-	"github.com/pkg/errors"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/VividCortex/mysqlerr"
+	"github.com/go-sql-driver/mysql"
+	"github.com/imdario/mergo"
+	"github.com/pkg/errors"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
 )
 
 type Options struct {

@@ -3,19 +3,19 @@ package main
 import (
 	"fmt"
 	"github.com/cheggaaa/pb/v3"
-	"github.com/pvelx/triggerHook/error_service"
-	"github.com/pvelx/triggerHook/monitoring_service"
-	"github.com/pvelx/triggerHook/repository"
-	"github.com/pvelx/triggerHook/util"
 	"log"
 	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/pvelx/triggerHook"
-	"github.com/pvelx/triggerHook/connection"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerhook"
+	"github.com/pvelx/triggerhook/connection"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/error_service"
+	"github.com/pvelx/triggerhook/monitoring_service"
+	"github.com/pvelx/triggerhook/repository"
+	"github.com/pvelx/triggerhook/util"
 )
 
 func upInitialState(taskCount int) {

@@ -2,10 +2,11 @@ package preloader_service
 
 import (
 	"github.com/imdario/mergo"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
 	"sync"
 	"time"
+
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
 )
 
 type Options struct {

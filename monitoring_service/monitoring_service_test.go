@@ -1,10 +1,11 @@
 package monitoring_service
 
 import (
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMainFlow(t *testing.T) {

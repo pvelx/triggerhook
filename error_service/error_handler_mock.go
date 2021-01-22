@@ -1,7 +1,7 @@
 package error_service
 
 import (
-	"github.com/pvelx/triggerHook/contracts"
+	"github.com/pvelx/triggerhook/contracts"
 )
 
 type ErrorHandlerMock struct {

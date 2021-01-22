@@ -2,11 +2,12 @@ package waiting_service
 
 import (
 	"fmt"
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/util"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/util"
+	"github.com/stretchr/testify/assert"
 )
 
 func taskBunch(execTime int64, count int) []domain.Task {

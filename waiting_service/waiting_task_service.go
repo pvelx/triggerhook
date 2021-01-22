@@ -1,13 +1,14 @@
 package waiting_service
 
 import (
-	"github.com/imdario/mergo"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/prioritized_task_list"
 	"math"
 	"sync"
 	"time"
+
+	"github.com/imdario/mergo"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/prioritized_task_list"
 )
 
 type Options struct {

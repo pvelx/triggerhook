@@ -4,14 +4,6 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/error_service"
-	"github.com/pvelx/triggerHook/util"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"log"
 	"math"
@@ -20,6 +12,13 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/error_service"
+	"github.com/pvelx/triggerhook/util"
+	"github.com/stretchr/testify/assert"
 )
 
 var (

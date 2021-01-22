@@ -1,11 +1,12 @@
 package prioritized_task_list
 
 import (
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/util"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/util"
 )
 
 func BenchmarkAdd(b *testing.B) {
