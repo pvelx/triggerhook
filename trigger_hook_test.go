@@ -91,10 +91,10 @@ func TestExample(t *testing.T) {
 
 func clear() {
 	conn := connection.NewMysqlClient(nil)
-	if _, err := conn.Exec("DELETE FROM task"); err != nil {
+	if _, err := conn.Exec("DROP TABLE IF EXISTS task"); err != nil {
 		log.Fatal(err)
 	}
-	if _, err := conn.Exec("DELETE FROM collection"); err != nil {
+	if _, err := conn.Exec("DROP TABLE IF EXISTS collection"); err != nil {
 		log.Fatal(err)
 	}
 	conn.Close()
