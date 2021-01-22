@@ -2,6 +2,8 @@ package waiting_service
 
 import (
 	"fmt"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/monitoring_service"
 	"testing"
 	"time"
 
@@ -20,8 +22,15 @@ func taskBunch(execTime int64, count int) []domain.Task {
 
 func Test(t *testing.T) {
 	chPreloadedTask := make(chan domain.Task, 10000)
-	chTasksReadyToSend := make(chan domain.Task, 10000)
-	waitingTaskService := New(chPreloadedTask, nil, nil, nil, nil)
+
+	monitoringMock := &monitoring_service.MonitoringMock{
+		InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
+		PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
+		ListenMock:  func(topic contracts.Topic, callback func() int64) error { return nil },
+	}
+
+	waitingTaskService := New(chPreloadedTask, monitoringMock, nil, nil, nil)
+	chTasksReadyToSend := waitingTaskService.GetReadyToSendChan()
 	countOfTasksOnSameTime := 1000
 	countOfSeconds := 10
 	var pauseSec float32 = 0.5

@@ -3,6 +3,7 @@ package error_service
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/pvelx/triggerhook/contracts"
 	"github.com/stretchr/testify/assert"
@@ -54,7 +55,7 @@ func TestSendEvent(t *testing.T) {
 			contracts.LevelError: func(event contracts.EventError) { eventErrorCh <- event },
 			contracts.LevelFatal: func(event contracts.EventError) { eventFatalCh <- event },
 		},
-		Debug:      false,
+		Debug:      true,
 		ChEventCap: 0,
 	})
 
@@ -75,6 +76,8 @@ func TestSendEvent(t *testing.T) {
 			case event = <-eventFatalCh:
 				assert.Equal(t, contracts.LevelFatal, event.Level, "must be level fatal")
 				assert.Equal(t, errors.New(test.eventMessage), <-errorCh, "must be level fatal")
+			case <-time.After(time.Second):
+				assert.Fail(t, "does not receive error")
 			}
 		})
 	}

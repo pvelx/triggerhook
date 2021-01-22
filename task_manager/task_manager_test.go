@@ -1,6 +1,7 @@
 package task_manager
 
 import (
+	"github.com/pvelx/triggerhook/monitoring_service"
 	"testing"
 	"time"
 
@@ -24,21 +25,21 @@ func TestTaskManager_Delete(t *testing.T) {
 		{
 			name:                        "main flow - without error",
 			inputErrorRepository:        []error{nil},
-			expectedError:               nil,
+			expectedError:               contracts.TmErrorTaskNotFound,
 			countCallMethodOfRepository: 1,
 			expectedEvents:              []string{},
 		},
 		{
 			name:                        "1 times retryable error",
 			inputErrorRepository:        []error{contracts.Deadlock, nil},
-			expectedError:               nil,
+			expectedError:               contracts.TmErrorTaskNotFound,
 			countCallMethodOfRepository: 2,
 			expectedEvents:              []string{contracts.Deadlock.Error()},
 		},
 		{
 			name:                        "2 times retryable error",
 			inputErrorRepository:        []error{contracts.Deadlock, contracts.Deadlock, nil},
-			expectedError:               nil,
+			expectedError:               contracts.TmErrorTaskNotFound,
 			countCallMethodOfRepository: 3,
 			expectedEvents:              []string{contracts.Deadlock.Error(), contracts.Deadlock.Error()},
 		},
@@ -74,7 +75,12 @@ func TestTaskManager_Delete(t *testing.T) {
 				countCallNewOfEventHandler++
 			}}
 
-			tm := New(r, eeh, nil, nil)
+			monitoringMock := &monitoring_service.MonitoringMock{
+				InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
+				PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
+			}
+
+			tm := New(r, eeh, monitoringMock, nil)
 
 			result := tm.Delete(util.NewId())
 
@@ -136,8 +142,12 @@ func TestTaskManager_Create(t *testing.T) {
 				assert.Equal(t, test.expectedEvents[countCallNewOfEventHandler], eventMessage, "must be LevelError")
 				countCallNewOfEventHandler++
 			}}
+			monitoringMock := &monitoring_service.MonitoringMock{
+				InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
+				PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
+			}
 
-			tm := New(r, eeh, nil, nil)
+			tm := New(r, eeh, monitoringMock, nil)
 
 			result := tm.Create(&domain.Task{}, true)
 
@@ -200,7 +210,12 @@ func TestTaskManager_ConfirmExecution(t *testing.T) {
 				countCallNewOfEventHandler++
 			}}
 
-			tm := New(r, eeh, nil, nil)
+			monitoringMock := &monitoring_service.MonitoringMock{
+				InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
+				PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
+			}
+
+			tm := New(r, eeh, monitoringMock, nil)
 
 			result := tm.ConfirmExecution([]domain.Task{{}, {}, {}})
 
@@ -286,7 +301,12 @@ func TestTaskManagerMock_GetTasksToComplete(t *testing.T) {
 				countCallNewOfEventHandler++
 			}}
 
-			tm := New(r, eeh, nil, nil)
+			monitoringMock := &monitoring_service.MonitoringMock{
+				InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
+				PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
+			}
+
+			tm := New(r, eeh, monitoringMock, nil)
 
 			result, err := tm.GetTasksToComplete(time.Second)
 

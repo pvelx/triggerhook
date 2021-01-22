@@ -17,6 +17,7 @@ type RepositoryMock struct {
 	DeleteMock              func(tasks []domain.Task) (int64, error)
 	FindBySecToExecTimeMock func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error)
 	UpMock                  func() error
+	CountMock               func() (int, error)
 }
 
 func (r *RepositoryMock) Create(task domain.Task, isTaken bool) error {
@@ -28,7 +29,17 @@ func (r *RepositoryMock) Delete(tasks []domain.Task) (int64, error) {
 }
 
 func (r *RepositoryMock) Up() (error error) {
+	if r.UpMock == nil {
+		return nil
+	}
 	return r.UpMock()
+}
+
+func (r *RepositoryMock) Count() (int, error) {
+	if r.UpMock == nil {
+		return 0, nil
+	}
+	return r.CountMock()
 }
 
 func (r *RepositoryMock) FindBySecToExecTime(preloadingTimeRange time.Duration) (

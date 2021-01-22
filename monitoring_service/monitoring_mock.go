@@ -24,21 +24,21 @@ func (m *MonitoringMock) Init(topic contracts.Topic, metricType contracts.Metric
 }
 
 func (m *MonitoringMock) Publish(topic contracts.Topic, measurement int64) error {
-	if m.InitMock == nil {
+	if m.PublishMock == nil {
 		panic("Method is not implemented")
 	}
 	return m.PublishMock(topic, measurement)
 }
 
 func (m *MonitoringMock) Listen(topic contracts.Topic, callback func() int64) error {
-	if m.InitMock == nil {
+	if m.ListenMock == nil {
 		panic("Method is not implemented")
 	}
 	return m.ListenMock(topic, callback)
 }
 
 func (m *MonitoringMock) Run() {
-	if m.InitMock == nil {
+	if m.RunMock == nil {
 		panic("Method is not implemented")
 	}
 	m.RunMock()

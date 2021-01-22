@@ -2,6 +2,7 @@ package preloader_service
 
 import (
 	"fmt"
+	"github.com/pvelx/triggerhook/monitoring_service"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,7 +23,13 @@ func TestTaskAdding(t *testing.T) {
 		return nil
 	}}
 
-	preloadingTaskService := New(taskManagerMock, nil, nil, nil)
+	monitoringMock := &monitoring_service.MonitoringMock{
+		InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
+		PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
+		ListenMock:  func(topic contracts.Topic, callback func() int64) error { return nil },
+	}
+
+	preloadingTaskService := New(taskManagerMock, nil, monitoringMock, nil)
 
 	now := time.Now().Unix()
 	tests := []struct {
@@ -141,7 +148,13 @@ func TestMainFlow(t *testing.T) {
 		},
 	}
 
-	preloadingTaskService := New(taskManagerMock, &error_service.ErrorHandlerMock{}, nil, nil)
+	monitoringMock := &monitoring_service.MonitoringMock{
+		InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
+		PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
+		ListenMock:  func(topic contracts.Topic, callback func() int64) error { return nil },
+	}
+
+	preloadingTaskService := New(taskManagerMock, &error_service.ErrorHandlerMock{}, monitoringMock, nil)
 
 	chPreloadedTask := preloadingTaskService.GetPreloadedChan()
 	go preloadingTaskService.Run()

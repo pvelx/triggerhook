@@ -2,6 +2,7 @@ package triggerHook
 
 import (
 	"fmt"
+	"github.com/pvelx/triggerhook/connection"
 	"log"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 )
 
 func TestExample(t *testing.T) {
-
+	clear()
 	actualAllTasksCount := 0
 	triggerHook := Build(Config{
 		/*
@@ -86,4 +87,15 @@ func TestExample(t *testing.T) {
 	time.Sleep(13 * time.Second)
 
 	assert.Equal(t, expectedAllTasksCount, actualAllTasksCount, "count tasks is not correct")
+}
+
+func clear() {
+	conn := connection.NewMysqlClient(nil)
+	if _, err := conn.Exec("DELETE FROM task"); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := conn.Exec("DELETE FROM collection"); err != nil {
+		log.Fatal(err)
+	}
+	conn.Close()
 }
