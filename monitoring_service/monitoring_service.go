@@ -1,9 +1,10 @@
 package monitoring_service
 
 import (
-	"github.com/imdario/mergo"
-	"github.com/pvelx/triggerHook/contracts"
 	"time"
+
+	"github.com/imdario/mergo"
+	"github.com/pvelx/triggerhook/contracts"
 )
 
 type MetricInterface interface {
@@ -13,7 +14,7 @@ type MetricInterface interface {
 
 type Options struct {
 	PeriodMeasure time.Duration
-	EventChCap    int
+	EventCap      int
 
 	/*
 		Subscribing to measurement events
@@ -28,7 +29,7 @@ func New(options *Options) contracts.MonitoringInterface {
 
 	if err := mergo.Merge(options, Options{
 		PeriodMeasure: 10 * time.Second,
-		EventChCap:    1000,
+		EventCap:      1000,
 	}); err != nil {
 		panic(err)
 	}
@@ -37,7 +38,7 @@ func New(options *Options) contracts.MonitoringInterface {
 	for topic, callback := range options.Subscriptions {
 		topic := topic
 		callback := callback
-		eventCh := make(chan contracts.MeasurementEvent, options.EventChCap)
+		eventCh := make(chan contracts.MeasurementEvent, options.EventCap)
 		subscriptionChs[topic] = append(subscriptionChs[topic], eventCh)
 
 		go func() {
@@ -51,7 +52,7 @@ func New(options *Options) contracts.MonitoringInterface {
 		periodMeasure:   options.PeriodMeasure,
 		metrics:         make(map[contracts.Topic]MetricInterface),
 		subscriptionChs: subscriptionChs,
-		eventChCap:      options.EventChCap,
+		EventCap:        options.EventCap,
 	}
 }
 
@@ -59,13 +60,13 @@ type Monitoring struct {
 	periodMeasure   time.Duration
 	metrics         map[contracts.Topic]MetricInterface
 	subscriptionChs map[contracts.Topic][]chan contracts.MeasurementEvent
-	eventChCap      int
+	EventCap        int
 }
 
 func (m *Monitoring) Init(topic contracts.Topic, calcType contracts.MetricType) error {
 
 	if _, ok := m.metrics[topic]; ok {
-		return contracts.TopicExist
+		return contracts.MonitoringErrorTopicExist
 	}
 
 	var metric MetricInterface
@@ -87,7 +88,7 @@ func (m *Monitoring) Init(topic contracts.Topic, calcType contracts.MetricType) 
 func (m *Monitoring) Publish(topic contracts.Topic, measurement int64) error {
 	metric, ok := m.metrics[topic]
 	if !ok {
-		return contracts.TopicIsNotInitialized
+		return contracts.MonitoringErrorTopicIsNotInitialized
 	}
 
 	metric.Set(measurement)
@@ -98,7 +99,7 @@ func (m *Monitoring) Publish(topic contracts.Topic, measurement int64) error {
 func (m *Monitoring) Listen(topic contracts.Topic, callback func() int64) error {
 
 	if _, ok := m.metrics[topic]; ok {
-		return contracts.TopicExist
+		return contracts.MonitoringErrorTopicExist
 	}
 	metric := &ValueMetric{}
 	m.metrics[topic] = metric

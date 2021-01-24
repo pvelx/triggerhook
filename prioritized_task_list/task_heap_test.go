@@ -1,12 +1,13 @@
 package prioritized_task_list
 
 import (
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/util"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/util"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestShuffleTask(t *testing.T) {

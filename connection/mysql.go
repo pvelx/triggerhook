@@ -3,6 +3,7 @@ package connection
 import (
 	"database/sql"
 	"fmt"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/imdario/mergo"
 )
@@ -16,9 +17,17 @@ type Options struct {
 	MaxOpenConns int
 }
 
-func NewMysqlClient(options Options) *sql.DB {
+func New(options *Options) *sql.DB {
 
-	if err := mergo.Merge(&options, Options{
+	if options == nil {
+		options = &Options{}
+	}
+
+	if err := mergo.Merge(options, Options{
+		Host:         "127.0.0.1:3306",
+		User:         "root",
+		Password:     "",
+		DbName:       "task",
 		MaxOpenConns: 25,
 		MaxIdleConns: 25,
 	}); err != nil {

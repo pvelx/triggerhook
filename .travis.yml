@@ -1,0 +1,18 @@
+language: go
+go:
+  - 1.x
+
+services:
+  - mysql
+
+before_install:
+  - mysql -e 'CREATE DATABASE task;'
+
+script:
+#  - GOMAXPROCS=4 go test ./ -v
+#  - GOMAXPROCS=4 go test ./repository -v
+#  - go test ./sender_service ./task_manager ./error_service ./prioritized_task_list ./preloader_service ./monitoring_service ./waiting_service -v
+  - make test
+
+notifications:
+  email: false

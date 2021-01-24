@@ -1,16 +1,16 @@
-package triggerHook
+package triggerhook
 
 import (
-	"github.com/pvelx/triggerHook/connection"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/error_service"
-	"github.com/pvelx/triggerHook/monitoring_service"
-	"github.com/pvelx/triggerHook/preloader_service"
-	"github.com/pvelx/triggerHook/repository"
-	"github.com/pvelx/triggerHook/sender_service"
-	"github.com/pvelx/triggerHook/task_manager"
-	"github.com/pvelx/triggerHook/util"
-	"github.com/pvelx/triggerHook/waiting_service"
+	"github.com/pvelx/triggerhook/connection"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/error_service"
+	"github.com/pvelx/triggerhook/monitoring_service"
+	"github.com/pvelx/triggerhook/preloader_service"
+	"github.com/pvelx/triggerhook/repository"
+	"github.com/pvelx/triggerhook/sender_service"
+	"github.com/pvelx/triggerhook/task_manager"
+	"github.com/pvelx/triggerhook/util"
+	"github.com/pvelx/triggerhook/waiting_service"
 )
 
 type Config struct {
@@ -24,13 +24,13 @@ type Config struct {
 	PreloaderServiceOptions  preloader_service.Options
 }
 
-func Build(config Config) contracts.TasksDeferredInterface {
+func Build(config Config) contracts.TriggerHookInterface {
 
 	errorService := error_service.New(&config.ErrorServiceOptions)
 	monitoringService := monitoring_service.New(&config.MonitoringServiceOptions)
 
 	repositoryService := repository.New(
-		connection.NewMysqlClient(config.Connection),
+		connection.New(&config.Connection),
 		util.NewId(),
 		errorService,
 		&config.RepositoryOptions,

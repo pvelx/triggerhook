@@ -1,11 +1,11 @@
 package error_service
 
 import (
-	"github.com/pvelx/triggerHook/contracts"
+	"github.com/pvelx/triggerhook/contracts"
 )
 
 type ErrorHandlerMock struct {
-	contracts.EventErrorHandlerInterface
+	contracts.EventHandlerInterface
 
 	/*
 		You need to substitute *Mock methods to do substitute original functions

@@ -2,8 +2,10 @@ package prioritized_task_list
 
 import (
 	"container/heap"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
+	"sync"
+
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
 )
 
 func New(tasks []domain.Task) contracts.PrioritizedTaskListInterface {
@@ -29,9 +31,12 @@ type heapPrioritizedTaskList struct {
 	contracts.PrioritizedTaskListInterface
 	pq    items
 	index map[string]*int
+	sync.Mutex
 }
 
 func (tqh *heapPrioritizedTaskList) Add(task domain.Task) {
+	tqh.Lock()
+	defer tqh.Unlock()
 	item := &item{
 		task:     task,
 		priority: task.ExecTime,
@@ -41,20 +46,23 @@ func (tqh *heapPrioritizedTaskList) Add(task domain.Task) {
 }
 
 func (tqh *heapPrioritizedTaskList) DeleteIfExist(taskId string) bool {
+	tqh.Lock()
+	defer tqh.Unlock()
 	index, ok := tqh.index[taskId]
 	if ok {
 		heap.Remove(&tqh.pq, *index)
+		delete(tqh.index, taskId)
 	}
 
 	return ok
 }
 
 func (tqh *heapPrioritizedTaskList) Take() *domain.Task {
-	for tqh.pq.Len() > 0 {
+	tqh.Lock()
+	defer tqh.Unlock()
+	if tqh.pq.Len() > 0 {
 		task := heap.Pop(&tqh.pq).(*item).task.(domain.Task)
-		if _, ok := tqh.index[task.Id]; ok {
-			delete(tqh.index, task.Id)
-		}
+		delete(tqh.index, task.Id)
 
 		return &task
 	}
@@ -62,5 +70,7 @@ func (tqh *heapPrioritizedTaskList) Take() *domain.Task {
 }
 
 func (tqh *heapPrioritizedTaskList) Len() int {
+	tqh.Lock()
+	defer tqh.Unlock()
 	return tqh.pq.Len()
 }

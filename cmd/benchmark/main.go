@@ -7,16 +7,18 @@ import (
 	"os"
 
 	"github.com/olekukonko/tablewriter"
-	"github.com/pvelx/triggerHook/connection"
+	"github.com/pvelx/triggerhook/connection"
+)
+
+var (
+	mysqlUser     = os.Getenv("DATABASE_USER")
+	mysqlPassword = os.Getenv("DATABASE_PASSWORD")
+	mysqlHost     = os.Getenv("DATABASE_HOST")
+	mysqlDbName   = os.Getenv("DATABASE_NAME")
 )
 
 func clear() {
-	conn := connection.NewMysqlClient(connection.Options{
-		User:     "root",
-		Password: "secret",
-		Host:     "127.0.0.1:3306",
-		DbName:   "test_db",
-	})
+	conn := connection.New(nil)
 	if _, err := conn.Exec("DELETE FROM task"); err != nil {
 		log.Fatal(err)
 	}

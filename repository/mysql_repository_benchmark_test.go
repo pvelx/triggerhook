@@ -2,13 +2,14 @@ package repository
 
 import (
 	"fmt"
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/error_service"
-	"github.com/pvelx/triggerHook/util"
 	"log"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/error_service"
+	"github.com/pvelx/triggerhook/util"
 )
 
 func BenchmarkDelete1000(b *testing.B) {

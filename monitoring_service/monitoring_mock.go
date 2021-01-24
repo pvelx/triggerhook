@@ -1,7 +1,7 @@
 package monitoring_service
 
 import (
-	"github.com/pvelx/triggerHook/contracts"
+	"github.com/pvelx/triggerhook/contracts"
 )
 
 type MonitoringMock struct {
@@ -18,28 +18,28 @@ type MonitoringMock struct {
 
 func (m *MonitoringMock) Init(topic contracts.Topic, metricType contracts.MetricType) error {
 	if m.InitMock == nil {
-		panic("Method is not implemented")
+		return nil
 	}
 	return m.InitMock(topic, metricType)
 }
 
 func (m *MonitoringMock) Publish(topic contracts.Topic, measurement int64) error {
-	if m.InitMock == nil {
-		panic("Method is not implemented")
+	if m.PublishMock == nil {
+		return nil
 	}
 	return m.PublishMock(topic, measurement)
 }
 
 func (m *MonitoringMock) Listen(topic contracts.Topic, callback func() int64) error {
-	if m.InitMock == nil {
-		panic("Method is not implemented")
+	if m.ListenMock == nil {
+		return nil
 	}
 	return m.ListenMock(topic, callback)
 }
 
 func (m *MonitoringMock) Run() {
-	if m.InitMock == nil {
-		panic("Method is not implemented")
+	if m.RunMock == nil {
+		return
 	}
 	m.RunMock()
 }

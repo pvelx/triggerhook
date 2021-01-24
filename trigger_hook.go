@@ -1,41 +1,41 @@
-package triggerHook
+package triggerhook
 
 import (
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
 )
 
 func New(
-	eventErrorHandler contracts.EventErrorHandlerInterface,
-	waitingTaskService contracts.WaitingTaskServiceInterface,
-	preloadingTaskService contracts.PreloadingTaskServiceInterface,
-	senderService contracts.TaskSenderInterface,
+	eventHandler contracts.EventHandlerInterface,
+	waitingService contracts.WaitingServiceInterface,
+	preloadingService contracts.PreloadingServiceInterface,
+	senderService contracts.SenderServiceInterface,
 	monitoringService contracts.MonitoringInterface,
-) contracts.TasksDeferredInterface {
+) contracts.TriggerHookInterface {
 
 	return &triggerHook{
-		eventErrorHandler:     eventErrorHandler,
-		waitingTaskService:    waitingTaskService,
-		preloadingTaskService: preloadingTaskService,
-		senderService:         senderService,
-		monitoringService:     monitoringService,
+		eventHandler:      eventHandler,
+		waitingService:    waitingService,
+		preloadingService: preloadingService,
+		senderService:     senderService,
+		monitoringService: monitoringService,
 	}
 }
 
 type triggerHook struct {
-	waitingTaskService    contracts.WaitingTaskServiceInterface
-	preloadingTaskService contracts.PreloadingTaskServiceInterface
-	senderService         contracts.TaskSenderInterface
-	eventErrorHandler     contracts.EventErrorHandlerInterface
-	monitoringService     contracts.MonitoringInterface
+	waitingService    contracts.WaitingServiceInterface
+	preloadingService contracts.PreloadingServiceInterface
+	senderService     contracts.SenderServiceInterface
+	eventHandler      contracts.EventHandlerInterface
+	monitoringService contracts.MonitoringInterface
 }
 
 func (s *triggerHook) Delete(taskId string) error {
-	return s.waitingTaskService.CancelIfExist(taskId)
+	return s.waitingService.CancelIfExist(taskId)
 }
 
 func (s *triggerHook) Create(task *domain.Task) error {
-	return s.preloadingTaskService.AddNewTask(task)
+	return s.preloadingService.AddNewTask(task)
 }
 
 func (s *triggerHook) Consume() contracts.TaskToSendInterface {
@@ -43,10 +43,10 @@ func (s *triggerHook) Consume() contracts.TaskToSendInterface {
 }
 
 func (s *triggerHook) Run() error {
-	go s.preloadingTaskService.Run()
-	go s.waitingTaskService.Run()
+	go s.preloadingService.Run()
+	go s.waitingService.Run()
 	go s.senderService.Run()
 	go s.monitoringService.Run()
 
-	return s.eventErrorHandler.Run()
+	return s.eventHandler.Run()
 }

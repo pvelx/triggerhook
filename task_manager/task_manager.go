@@ -1,11 +1,12 @@
 package task_manager
 
 import (
-	"github.com/imdario/mergo"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
-	"github.com/pvelx/triggerHook/util"
 	"time"
+
+	"github.com/imdario/mergo"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
+	"github.com/pvelx/triggerhook/util"
 )
 
 type Options struct {
@@ -15,7 +16,7 @@ type Options struct {
 
 func New(
 	repository contracts.RepositoryInterface,
-	eeh contracts.EventErrorHandlerInterface,
+	eh contracts.EventHandlerInterface,
 	monitoring contracts.MonitoringInterface,
 	options *Options,
 ) contracts.TaskManagerInterface {
@@ -40,16 +41,16 @@ func New(
 		panic(err)
 	}
 
-	if err := monitoring.Init(contracts.CountOfAllTasks, contracts.IntegralMetricType); err != nil {
+	if err := monitoring.Init(contracts.All, contracts.IntegralMetricType); err != nil {
 		panic(err)
 	}
-	if err := monitoring.Publish(contracts.CountOfAllTasks, int64(count)); err != nil {
+	if err := monitoring.Publish(contracts.All, int64(count)); err != nil {
 		panic(err)
 	}
 
 	return &taskManager{
 		repository:          repository,
-		eeh:                 eeh,
+		eh:                  eh,
 		maxRetry:            options.MaxRetry,
 		timeGapBetweenRetry: options.TimeGapBetweenRetry,
 		monitoring:          monitoring,
@@ -59,7 +60,7 @@ func New(
 type taskManager struct {
 	contracts.TaskManagerInterface
 	repository          contracts.RepositoryInterface
-	eeh                 contracts.EventErrorHandlerInterface
+	eh                  contracts.EventHandlerInterface
 	maxRetry            int
 	timeGapBetweenRetry time.Duration
 	monitoring          contracts.MonitoringInterface
@@ -79,24 +80,24 @@ func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
 
 	err := s.retry(func() error {
 		return s.repository.Create(*task, isTaken)
-	}, contracts.Deadlock)
+	}, contracts.RepoErrorDeadlock)
 
-	if err == contracts.TaskExist {
-		s.eeh.New(contracts.LevelDebug, err.Error(), map[string]interface{}{
+	if err == contracts.RepoErrorTaskExist {
+		s.eh.New(contracts.LevelDebug, err.Error(), map[string]interface{}{
 			"task": task,
 		})
 
 		return contracts.TmErrorTaskExist
 	} else if err != nil {
-		s.eeh.New(contracts.LevelError, err.Error(), map[string]interface{}{
+		s.eh.New(contracts.LevelError, err.Error(), map[string]interface{}{
 			"task": task,
 		})
 
 		return contracts.TmErrorCreatingTasks
 	}
 
-	if err := s.monitoring.Publish(contracts.CountOfAllTasks, 1); err != nil {
-		s.eeh.New(contracts.LevelError, err.Error(), nil)
+	if err := s.monitoring.Publish(contracts.All, 1); err != nil {
+		s.eh.New(contracts.LevelError, err.Error(), nil)
 	}
 
 	return nil
@@ -107,10 +108,10 @@ func (s *taskManager) Delete(taskId string) error {
 	errDeleting := s.retry(func() (err error) {
 		affected, err = s.repository.Delete([]domain.Task{{Id: taskId}})
 		return
-	}, contracts.Deadlock)
+	}, contracts.RepoErrorDeadlock)
 
 	if errDeleting != nil {
-		s.eeh.New(contracts.LevelError, errDeleting.Error(), map[string]interface{}{
+		s.eh.New(contracts.LevelError, errDeleting.Error(), map[string]interface{}{
 			"taskId": taskId,
 		})
 
@@ -121,8 +122,8 @@ func (s *taskManager) Delete(taskId string) error {
 		return contracts.TmErrorTaskNotFound
 	}
 
-	if err := s.monitoring.Publish(contracts.CountOfAllTasks, -affected); err != nil {
-		s.eeh.New(contracts.LevelError, err.Error(), nil)
+	if err := s.monitoring.Publish(contracts.All, -affected); err != nil {
+		s.eh.New(contracts.LevelError, err.Error(), nil)
 	}
 
 	return nil
@@ -133,13 +134,13 @@ func (s *taskManager) GetTasksToComplete(preloadingTimeRange time.Duration) (con
 	errFinding := s.retry(func() (err error) {
 		collections, err = s.repository.FindBySecToExecTime(preloadingTimeRange)
 		return
-	}, contracts.Deadlock)
+	}, contracts.RepoErrorDeadlock)
 
 	switch {
-	case errFinding == contracts.NoTasksFound:
+	case errFinding == contracts.RepoErrorNoTasksFound:
 		return nil, contracts.TmErrorCollectionsNotFound
 	case errFinding != nil:
-		s.eeh.New(contracts.LevelError, errFinding.Error(), nil)
+		s.eh.New(contracts.LevelError, errFinding.Error(), nil)
 		return collections, contracts.TmErrorGetTasks
 	}
 
@@ -151,17 +152,17 @@ func (s *taskManager) ConfirmExecution(tasks []domain.Task) error {
 	errConfirm := s.retry(func() (err error) {
 		affected, err = s.repository.Delete(tasks)
 		return
-	}, contracts.Deadlock)
+	}, contracts.RepoErrorDeadlock)
 
 	if errConfirm != nil {
-		s.eeh.New(contracts.LevelError, errConfirm.Error(), map[string]interface{}{
+		s.eh.New(contracts.LevelError, errConfirm.Error(), map[string]interface{}{
 			"count of task": len(tasks),
 		})
 		return contracts.TmErrorConfirmationTasks
 	}
 
-	if err := s.monitoring.Publish(contracts.CountOfAllTasks, -affected); err != nil {
-		s.eeh.New(contracts.LevelError, err.Error(), nil)
+	if err := s.monitoring.Publish(contracts.All, -affected); err != nil {
+		s.eh.New(contracts.LevelError, err.Error(), nil)
 	}
 
 	return nil
@@ -171,7 +172,7 @@ func (s *taskManager) retry(callback func() error, retryableErrors ...error) (er
 	for try := 1; try <= s.maxRetry; try++ {
 		if err = callback(); err != nil {
 			if util.Contains(retryableErrors, err) {
-				s.eeh.New(contracts.LevelError, err.Error(), map[string]interface{}{
+				s.eh.New(contracts.LevelError, err.Error(), map[string]interface{}{
 					"try": try,
 				})
 				if try != s.maxRetry {

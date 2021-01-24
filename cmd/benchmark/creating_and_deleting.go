@@ -2,27 +2,27 @@ package main
 
 import (
 	"fmt"
-	"github.com/cheggaaa/pb/v3"
 	"log"
 	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/pvelx/triggerHook"
-	"github.com/pvelx/triggerHook/connection"
-	"github.com/pvelx/triggerHook/contracts"
-	"github.com/pvelx/triggerHook/domain"
+	"github.com/cheggaaa/pb/v3"
+	"github.com/pvelx/triggerhook"
+	"github.com/pvelx/triggerhook/connection"
+	"github.com/pvelx/triggerhook/contracts"
+	"github.com/pvelx/triggerhook/domain"
 )
 
 func creatingAndDeleting(taskCount int) [][]string {
 	var durationDeleting time.Duration
 
-	triggerHookService := triggerHook.Build(triggerHook.Config{
+	triggerHookService := triggerhook.Build(triggerhook.Config{
 		Connection: connection.Options{
-			User:     "root",
-			Password: "secret",
-			Host:     "127.0.0.1:3306",
-			DbName:   "test_db",
+			User:     mysqlUser,
+			Password: mysqlPassword,
+			Host:     mysqlHost,
+			DbName:   mysqlDbName,
 		},
 	})
 
@@ -55,7 +55,7 @@ func creatingAndDeleting(taskCount int) [][]string {
 	}
 }
 
-func deleteTasks(tasks <-chan *domain.Task, triggerHookService contracts.TasksDeferredInterface) {
+func deleteTasks(tasks <-chan *domain.Task, triggerHookService contracts.TriggerHookInterface) {
 	fmt.Println("\nDeleting task")
 	preparingBar := pb.StartNew(len(tasks))
 
@@ -78,7 +78,7 @@ func deleteTasks(tasks <-chan *domain.Task, triggerHookService contracts.TasksDe
 }
 
 func createTasks(
-	triggerHookService contracts.TasksDeferredInterface,
+	triggerHookService contracts.TriggerHookInterface,
 	numberOfTask int,
 	dispersion int,
 ) <-chan *domain.Task {
