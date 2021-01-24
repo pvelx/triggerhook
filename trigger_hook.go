@@ -7,7 +7,7 @@ import (
 
 func New(
 	eventErrorHandler contracts.EventErrorHandlerInterface,
-	waitingTaskService contracts.WaitingTaskServiceInterface,
+	waitingService contracts.WaitingServiceInterface,
 	preloadingTaskService contracts.PreloadingTaskServiceInterface,
 	senderService contracts.TaskSenderInterface,
 	monitoringService contracts.MonitoringInterface,
@@ -15,7 +15,7 @@ func New(
 
 	return &triggerHook{
 		eventErrorHandler:     eventErrorHandler,
-		waitingTaskService:    waitingTaskService,
+		waitingService:        waitingService,
 		preloadingTaskService: preloadingTaskService,
 		senderService:         senderService,
 		monitoringService:     monitoringService,
@@ -23,7 +23,7 @@ func New(
 }
 
 type triggerHook struct {
-	waitingTaskService    contracts.WaitingTaskServiceInterface
+	waitingService        contracts.WaitingServiceInterface
 	preloadingTaskService contracts.PreloadingTaskServiceInterface
 	senderService         contracts.TaskSenderInterface
 	eventErrorHandler     contracts.EventErrorHandlerInterface
@@ -31,7 +31,7 @@ type triggerHook struct {
 }
 
 func (s *triggerHook) Delete(taskId string) error {
-	return s.waitingTaskService.CancelIfExist(taskId)
+	return s.waitingService.CancelIfExist(taskId)
 }
 
 func (s *triggerHook) Create(task *domain.Task) error {
@@ -44,7 +44,7 @@ func (s *triggerHook) Consume() contracts.TaskToSendInterface {
 
 func (s *triggerHook) Run() error {
 	go s.preloadingTaskService.Run()
-	go s.waitingTaskService.Run()
+	go s.waitingService.Run()
 	go s.senderService.Run()
 	go s.monitoringService.Run()
 

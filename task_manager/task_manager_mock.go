@@ -15,6 +15,7 @@ type TaskManagerMock struct {
 	*/
 	ConfirmExecutionMock   func(tasks []domain.Task) error
 	CreateMock             func(task *domain.Task, isTaken bool) error
+	DeleteMock             func(taskId string) error
 	GetTasksToCompleteMock func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error)
 }
 
@@ -28,4 +29,8 @@ func (tm *TaskManagerMock) Create(task *domain.Task, isTaken bool) error {
 
 func (tm *TaskManagerMock) GetTasksToComplete(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
 	return tm.GetTasksToCompleteMock(preloadingTimeRange)
+}
+
+func (tm *TaskManagerMock) Delete(taskId string) error {
+	return tm.DeleteMock(taskId)
 }

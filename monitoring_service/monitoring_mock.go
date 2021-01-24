@@ -18,28 +18,28 @@ type MonitoringMock struct {
 
 func (m *MonitoringMock) Init(topic contracts.Topic, metricType contracts.MetricType) error {
 	if m.InitMock == nil {
-		panic("Method is not implemented")
+		return nil
 	}
 	return m.InitMock(topic, metricType)
 }
 
 func (m *MonitoringMock) Publish(topic contracts.Topic, measurement int64) error {
 	if m.PublishMock == nil {
-		panic("Method is not implemented")
+		return nil
 	}
 	return m.PublishMock(topic, measurement)
 }
 
 func (m *MonitoringMock) Listen(topic contracts.Topic, callback func() int64) error {
 	if m.ListenMock == nil {
-		panic("Method is not implemented")
+		return nil
 	}
 	return m.ListenMock(topic, callback)
 }
 
 func (m *MonitoringMock) Run() {
 	if m.RunMock == nil {
-		panic("Method is not implemented")
+		return
 	}
 	m.RunMock()
 }

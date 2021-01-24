@@ -76,7 +76,6 @@ func TestExample(t *testing.T) {
 				if err := triggerHook.Create(&domain.Task{
 					ExecTime: execTime,
 				}); err != nil {
-					fmt.Println(err)
 					t.Fatal(err)
 				}
 			}

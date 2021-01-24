@@ -107,9 +107,9 @@ type PreloadingTaskServiceInterface interface {
 }
 
 /*	--------------------------------------------------
-	Waiting task service
+	Waiting service
 */
-type WaitingTaskServiceInterface interface {
+type WaitingServiceInterface interface {
 	CancelIfExist(taskId string) error
 	GetReadyToSendChan() chan domain.Task
 	Run()
