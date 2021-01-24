@@ -23,16 +23,16 @@ func TestAddNormalTask(t *testing.T) {
 	offset := 0
 	pause := 5 * time.Second
 	pauseStep := pause / time.Duration(inputCountOfTasks)
-	chPreloadedTask := make(chan domain.Task, inputCountOfTasks)
+	preloadedTask := make(chan domain.Task, inputCountOfTasks)
 	wait := make(chan bool)
 
-	waitingService := instanceOfWaitingService(chPreloadedTask)
+	waitingService := instanceOfWaitingService(preloadedTask)
 
 	go waitingService.Run()
 
 	go func() {
 		for i := 0; i < inputCountOfTasks; i++ {
-			chPreloadedTask <- newTask(offset, dispersion)
+			preloadedTask <- newTask(offset, dispersion)
 			if i%(inputCountOfTasks/10) == 0 {
 				time.Sleep(pauseStep)
 			}
@@ -59,16 +59,16 @@ func TestDeleteTask(t *testing.T) {
 	inputCountOfTasks := 10000
 	dispersion := 2
 	offset := 2
-	chPreloadedTask := make(chan domain.Task, inputCountOfTasks)
+	preloadedTask := make(chan domain.Task, inputCountOfTasks)
 	var taskToDelete []domain.Task
 
-	waitingService := instanceOfWaitingService(chPreloadedTask)
+	waitingService := instanceOfWaitingService(preloadedTask)
 
 	go waitingService.Run()
 
 	for i := 0; i < inputCountOfTasks; i++ {
 		task := newTask(offset, dispersion)
-		chPreloadedTask <- task
+		preloadedTask <- task
 		taskToDelete = append(taskToDelete, task)
 	}
 
@@ -90,9 +90,9 @@ func TestAddLateTask(t *testing.T) {
 	inputCountOfTasks := 10000
 	dispersion := 10
 	offset := -10
-	chPreloadedTask := make(chan domain.Task, inputCountOfTasks)
+	preloadedTask := make(chan domain.Task, inputCountOfTasks)
 
-	waitingService := instanceOfWaitingService(chPreloadedTask)
+	waitingService := instanceOfWaitingService(preloadedTask)
 
 	//run service
 	go waitingService.Run()
@@ -109,7 +109,7 @@ func TestAddLateTask(t *testing.T) {
 	}()
 
 	for i := 0; i < inputCountOfTasks; i++ {
-		chPreloadedTask <- newTask(offset, dispersion)
+		preloadedTask <- newTask(offset, dispersion)
 	}
 
 	time.Sleep(100 * time.Millisecond)
@@ -117,9 +117,9 @@ func TestAddLateTask(t *testing.T) {
 	assert.Equal(t, inputCountOfTasks, actualCountOfTasks, "tasks count is not correct")
 }
 
-func instanceOfWaitingService(chPreloadedTask chan domain.Task) contracts.WaitingServiceInterface {
+func instanceOfWaitingService(preloadedTask chan domain.Task) contracts.WaitingServiceInterface {
 	return New(
-		chPreloadedTask,
+		preloadedTask,
 		&monitoring_service.MonitoringMock{},
 		&task_manager.TaskManagerMock{DeleteMock: func(taskId string) error {
 			return nil

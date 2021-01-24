@@ -1,13 +1,13 @@
 package task_manager
 
 import (
-	"github.com/pvelx/triggerhook/monitoring_service"
 	"testing"
 	"time"
 
 	"github.com/pvelx/triggerhook/contracts"
 	"github.com/pvelx/triggerhook/domain"
 	"github.com/pvelx/triggerhook/error_service"
+	"github.com/pvelx/triggerhook/monitoring_service"
 	"github.com/pvelx/triggerhook/repository"
 	"github.com/pvelx/triggerhook/util"
 	"github.com/stretchr/testify/assert"
@@ -31,28 +31,28 @@ func TestTaskManager_Delete(t *testing.T) {
 		},
 		{
 			name:                        "1 times retryable error",
-			inputErrorRepository:        []error{contracts.Deadlock, nil},
+			inputErrorRepository:        []error{contracts.RepoErrorDeadlock, nil},
 			expectedError:               contracts.TmErrorTaskNotFound,
 			countCallMethodOfRepository: 2,
-			expectedEvents:              []string{contracts.Deadlock.Error()},
+			expectedEvents:              []string{contracts.RepoErrorDeadlock.Error()},
 		},
 		{
 			name:                        "2 times retryable error",
-			inputErrorRepository:        []error{contracts.Deadlock, contracts.Deadlock, nil},
+			inputErrorRepository:        []error{contracts.RepoErrorDeadlock, contracts.RepoErrorDeadlock, nil},
 			expectedError:               contracts.TmErrorTaskNotFound,
 			countCallMethodOfRepository: 3,
-			expectedEvents:              []string{contracts.Deadlock.Error(), contracts.Deadlock.Error()},
+			expectedEvents:              []string{contracts.RepoErrorDeadlock.Error(), contracts.RepoErrorDeadlock.Error()},
 		},
 		{
 			name:                        "3 times  retryable error",
-			inputErrorRepository:        []error{contracts.Deadlock, contracts.Deadlock, contracts.Deadlock, nil},
+			inputErrorRepository:        []error{contracts.RepoErrorDeadlock, contracts.RepoErrorDeadlock, contracts.RepoErrorDeadlock, nil},
 			expectedError:               contracts.TmErrorDeletingTask,
 			countCallMethodOfRepository: 3,
 			expectedEvents: []string{
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
 			},
 		},
 	}
@@ -69,18 +69,13 @@ func TestTaskManager_Delete(t *testing.T) {
 			}}
 
 			countCallNewOfEventHandler := 0
-			eeh := &error_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
+			eh := &error_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
 				assert.Equal(t, contracts.LevelError, level, "must be LevelError")
 				assert.Equal(t, test.expectedEvents[countCallNewOfEventHandler], eventMessage, "must be LevelError")
 				countCallNewOfEventHandler++
 			}}
 
-			monitoringMock := &monitoring_service.MonitoringMock{
-				InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
-				PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
-			}
-
-			tm := New(r, eeh, monitoringMock, nil)
+			tm := New(r, eh, &monitoring_service.MonitoringMock{}, nil)
 
 			result := tm.Delete(util.NewId())
 
@@ -113,14 +108,14 @@ func TestTaskManager_Create(t *testing.T) {
 		},
 		{
 			name:                        "3 times retryable error",
-			inputErrorRepository:        []error{contracts.Deadlock, contracts.Deadlock, contracts.Deadlock, nil},
+			inputErrorRepository:        []error{contracts.RepoErrorDeadlock, contracts.RepoErrorDeadlock, contracts.RepoErrorDeadlock, nil},
 			expectedError:               contracts.TmErrorCreatingTasks,
 			countCallMethodOfRepository: 3,
 			expectedEvents: []string{
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
 			},
 		},
 	}
@@ -137,17 +132,13 @@ func TestTaskManager_Create(t *testing.T) {
 			}}
 
 			countCallNewOfEventHandler := 0
-			eeh := &error_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
+			eh := &error_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
 				assert.Equal(t, contracts.LevelError, level, "must be LevelError")
 				assert.Equal(t, test.expectedEvents[countCallNewOfEventHandler], eventMessage, "must be LevelError")
 				countCallNewOfEventHandler++
 			}}
-			monitoringMock := &monitoring_service.MonitoringMock{
-				InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
-				PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
-			}
 
-			tm := New(r, eeh, monitoringMock, nil)
+			tm := New(r, eh, &monitoring_service.MonitoringMock{}, nil)
 
 			result := tm.Create(&domain.Task{}, true)
 
@@ -180,14 +171,14 @@ func TestTaskManager_ConfirmExecution(t *testing.T) {
 		},
 		{
 			name:                        "3 times retryable error",
-			inputErrorRepository:        []error{contracts.Deadlock, contracts.Deadlock, contracts.Deadlock, nil},
+			inputErrorRepository:        []error{contracts.RepoErrorDeadlock, contracts.RepoErrorDeadlock, contracts.RepoErrorDeadlock, nil},
 			expectedError:               contracts.TmErrorConfirmationTasks,
 			countCallMethodOfRepository: 3,
 			expectedEvents: []string{
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
 			},
 		},
 	}
@@ -204,18 +195,13 @@ func TestTaskManager_ConfirmExecution(t *testing.T) {
 			}}
 
 			countCallNewOfEventHandler := 0
-			eeh := &error_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
+			eh := &error_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
 				assert.Equal(t, contracts.LevelError, level, "must be LevelError")
 				assert.Equal(t, test.expectedEvents[countCallNewOfEventHandler], eventMessage, "must be LevelError")
 				countCallNewOfEventHandler++
 			}}
 
-			monitoringMock := &monitoring_service.MonitoringMock{
-				InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
-				PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
-			}
-
-			tm := New(r, eeh, monitoringMock, nil)
+			tm := New(r, eh, &monitoring_service.MonitoringMock{}, nil)
 
 			result := tm.ConfirmExecution([]domain.Task{{}, {}, {}})
 
@@ -262,19 +248,19 @@ func TestTaskManagerMock_GetTasksToComplete(t *testing.T) {
 				error      error
 				collection contracts.CollectionsInterface
 			}{
-				{contracts.Deadlock, nil},
-				{contracts.Deadlock, nil},
-				{contracts.Deadlock, nil},
+				{contracts.RepoErrorDeadlock, nil},
+				{contracts.RepoErrorDeadlock, nil},
+				{contracts.RepoErrorDeadlock, nil},
 				{nil, &repository.Collections{}},
 			},
 			expectedError:               contracts.TmErrorGetTasks,
 			expectedResult:              nil,
 			countCallMethodOfRepository: 3,
 			expectedEvents: []string{
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
-				contracts.Deadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
+				contracts.RepoErrorDeadlock.Error(),
 			},
 		},
 	}
@@ -295,18 +281,13 @@ func TestTaskManagerMock_GetTasksToComplete(t *testing.T) {
 			}}
 
 			countCallNewOfEventHandler := 0
-			eeh := &error_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
+			eh := &error_service.ErrorHandlerMock{NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
 				assert.Equal(t, contracts.LevelError, level, "must be LevelError")
 				assert.Equal(t, test.expectedEvents[countCallNewOfEventHandler], eventMessage, "must be LevelError")
 				countCallNewOfEventHandler++
 			}}
 
-			monitoringMock := &monitoring_service.MonitoringMock{
-				InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
-				PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
-			}
-
-			tm := New(r, eeh, monitoringMock, nil)
+			tm := New(r, eh, &monitoring_service.MonitoringMock{}, nil)
 
 			result, err := tm.GetTasksToComplete(time.Second)
 

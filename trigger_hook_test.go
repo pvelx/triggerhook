@@ -1,13 +1,12 @@
-package triggerHook
+package triggerhook
 
 import (
-	"fmt"
-	"github.com/pvelx/triggerhook/connection"
 	"log"
 	"testing"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pvelx/triggerhook/connection"
 	"github.com/pvelx/triggerhook/domain"
 	"github.com/stretchr/testify/assert"
 )
@@ -32,15 +31,8 @@ func TestExample(t *testing.T) {
 		for {
 			result := triggerHook.Consume()
 			now := time.Now().Unix()
-			task := result.Task()
-
 			actualAllTasksCount++
-			if now != task.ExecTime &&
-				// an error of one second is allowed
-				now-1 != task.ExecTime {
-				assert.Fail(t, fmt.Sprintf(
-					"time exec of the task is not current time. expected:%d actual:%d", now, task.ExecTime))
-			}
+			assert.Equal(t, now, result.Task().ExecTime, "time exec of the task is not current time")
 			result.Confirm()
 		}
 	}()
@@ -89,7 +81,7 @@ func TestExample(t *testing.T) {
 }
 
 func clear() {
-	conn := connection.NewMysqlClient(nil)
+	conn := connection.New(nil)
 	if _, err := conn.Exec("DROP TABLE IF EXISTS task"); err != nil {
 		log.Fatal(err)
 	}

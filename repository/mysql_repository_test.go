@@ -89,7 +89,7 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 			for {
 				tasks, err := result.Next()
 				if err != nil {
-					if err == contracts.NoCollections {
+					if err == contracts.RepoErrorNoCollections {
 						break
 					} else {
 						log.Fatal(err, "Getting next part is fail")
@@ -148,7 +148,7 @@ func TestFindBySecToExecTime(t *testing.T) {
 	for {
 		tasks, errNext := collections.Next()
 		if errNext != nil {
-			if errNext == contracts.NoCollections {
+			if errNext == contracts.RepoErrorNoCollections {
 				break
 			} else {
 				log.Fatal(errNext, "Getting next part is fail")

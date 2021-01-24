@@ -2,9 +2,10 @@ package prioritized_task_list
 
 import (
 	"container/heap"
+	"sync"
+
 	"github.com/pvelx/triggerhook/contracts"
 	"github.com/pvelx/triggerhook/domain"
-	"sync"
 )
 
 func New(tasks []domain.Task) contracts.PrioritizedTaskListInterface {

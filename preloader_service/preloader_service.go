@@ -1,10 +1,10 @@
 package preloader_service
 
 import (
-	"github.com/imdario/mergo"
 	"sync"
 	"time"
 
+	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerhook/contracts"
 	"github.com/pvelx/triggerhook/domain"
 )
@@ -18,15 +18,15 @@ type Options struct {
 	CoefTimePreloadOfNewTask int
 	TaskNumberInOneSearch    int
 	WorkersCount             int
-	ChPreloadedTaskCap       int
+	PreloadedTaskCap         int
 }
 
 func New(
 	taskManager contracts.TaskManagerInterface,
-	eventErrorHandler contracts.EventErrorHandlerInterface,
+	eventHandler contracts.EventHandlerInterface,
 	monitoring contracts.MonitoringInterface,
 	options *Options,
-) contracts.PreloadingTaskServiceInterface {
+) contracts.PreloadingServiceInterface {
 
 	if options == nil {
 		options = &Options{}
@@ -37,31 +37,31 @@ func New(
 		CoefTimePreloadOfNewTask: 2,
 		TaskNumberInOneSearch:    1000,
 		WorkersCount:             10,
-		ChPreloadedTaskCap:       1000000,
+		PreloadedTaskCap:         1000000,
 	}
 
 	if err := mergo.Merge(options, defaultOptions); err != nil {
 		panic(err)
 	}
 
-	chPreloadedTask := make(chan domain.Task, options.ChPreloadedTaskCap)
+	preloadedTask := make(chan domain.Task, options.PreloadedTaskCap)
 
-	if err := monitoring.Listen(contracts.CountOfWaitingForSending, func() int64 {
-		return int64(len(chPreloadedTask))
+	if err := monitoring.Listen(contracts.WaitingForSending, func() int64 {
+		return int64(len(preloadedTask))
 	}); err != nil {
 		panic(err)
 	}
-	if err := monitoring.Init(contracts.SpeedOfCreating, contracts.VelocityMetricType); err != nil {
+	if err := monitoring.Init(contracts.CreatingRate, contracts.VelocityMetricType); err != nil {
 		panic(err)
 	}
-	if err := monitoring.Init(contracts.SpeedOfPreloading, contracts.VelocityMetricType); err != nil {
+	if err := monitoring.Init(contracts.PreloadingRate, contracts.VelocityMetricType); err != nil {
 		panic(err)
 	}
 
-	return &preloadingTaskService{
+	return &preloadingService{
 		taskManager:              taskManager,
-		eh:                       eventErrorHandler,
-		chPreloadedTask:          chPreloadedTask,
+		eh:                       eventHandler,
+		preloadedTask:            preloadedTask,
 		timePreload:              options.TimePreload,
 		coefTimePreloadOfNewTask: options.CoefTimePreloadOfNewTask,
 		taskNumberInOneSearch:    options.TaskNumberInOneSearch,
@@ -70,10 +70,10 @@ func New(
 	}
 }
 
-type preloadingTaskService struct {
+type preloadingService struct {
 	taskManager              contracts.TaskManagerInterface
-	eh                       contracts.EventErrorHandlerInterface
-	chPreloadedTask          chan domain.Task
+	eh                       contracts.EventHandlerInterface
+	preloadedTask            chan domain.Task
 	timePreload              time.Duration
 	coefTimePreloadOfNewTask int
 	taskNumberInOneSearch    int
@@ -81,11 +81,11 @@ type preloadingTaskService struct {
 	monitoring               contracts.MonitoringInterface
 }
 
-func (s *preloadingTaskService) GetPreloadedChan() <-chan domain.Task {
-	return s.chPreloadedTask
+func (s *preloadingService) GetPreloadedChan() <-chan domain.Task {
+	return s.preloadedTask
 }
 
-func (s *preloadingTaskService) AddNewTask(task *domain.Task) error {
+func (s *preloadingService) AddNewTask(task *domain.Task) error {
 	relativeTimeToExec := time.Duration(task.ExecTime-time.Now().Unix()) * time.Second
 	isTaken := s.timePreload*time.Duration(s.coefTimePreloadOfNewTask) > relativeTimeToExec
 
@@ -94,17 +94,17 @@ func (s *preloadingTaskService) AddNewTask(task *domain.Task) error {
 	}
 
 	if isTaken {
-		s.chPreloadedTask <- *task
+		s.preloadedTask <- *task
 	}
 
-	if err := s.monitoring.Publish(contracts.SpeedOfCreating, 1); err != nil {
+	if err := s.monitoring.Publish(contracts.CreatingRate, 1); err != nil {
 		s.eh.New(contracts.LevelError, err.Error(), nil)
 	}
 
 	return nil
 }
 
-func (s *preloadingTaskService) Run() {
+func (s *preloadingService) Run() {
 	for {
 		result, err := s.taskManager.GetTasksToComplete(s.timePreload)
 		switch {
@@ -131,12 +131,12 @@ func (s *preloadingTaskService) Run() {
 	}
 }
 
-func (s *preloadingTaskService) getBunchOfTask(wg *sync.WaitGroup, result contracts.CollectionsInterface, worker int) {
+func (s *preloadingService) getBunchOfTask(wg *sync.WaitGroup, result contracts.CollectionsInterface, worker int) {
 	defer wg.Done()
 	for {
 		tasks, err := result.Next()
 		if err != nil {
-			if err == contracts.NoCollections {
+			if err == contracts.RepoErrorNoCollections {
 				s.eh.New(contracts.LevelDebug, "end", map[string]interface{}{
 					"worker": worker,
 				})
@@ -157,12 +157,12 @@ func (s *preloadingTaskService) getBunchOfTask(wg *sync.WaitGroup, result contra
 			"worker":      worker,
 		})
 
-		if err := s.monitoring.Publish(contracts.SpeedOfPreloading, int64(len(tasks))); err != nil {
+		if err := s.monitoring.Publish(contracts.PreloadingRate, int64(len(tasks))); err != nil {
 			s.eh.New(contracts.LevelError, err.Error(), nil)
 		}
 
 		for _, task := range tasks {
-			s.chPreloadedTask <- task
+			s.preloadedTask <- task
 		}
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pvelx/triggerhook/contracts"
 	"github.com/pvelx/triggerhook/domain"
 	"github.com/pvelx/triggerhook/error_service"
 	"github.com/pvelx/triggerhook/monitoring_service"
@@ -13,17 +12,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func createTasks(chTaskReadyToSend chan domain.Task, count int) {
+func createTasks(taskReadyToSend chan domain.Task, count int) {
 	for i := 0; i < count; i++ {
-		chTaskReadyToSend <- domain.Task{Id: util.NewId(), ExecTime: time.Now().Unix()}
+		taskReadyToSend <- domain.Task{Id: util.NewId(), ExecTime: time.Now().Unix()}
 	}
 }
 
 /*
-	Тестирование пакетных подтверждений в таск менеджере.
+	Testing batch confirmations in the task manager.
 
-	Тест проверяет формирование пакетов задач на подтверждение.
-	На размер пакета и периодичность отправки влияют праметры BatchMaxItems и BatchTimeout.
+	The test checks the formation of task packages for confirmation.
+	The batch size and frequency of sending are affected by the BatchMaxItems and BatchTimeout parameters.
 */
 func TestConfirmation(t *testing.T) {
 	expTasksLen := make(chan int, 7)
@@ -36,12 +35,8 @@ func TestConfirmation(t *testing.T) {
 	expTasksLen <- 300
 
 	confirmationDuration := 100 * time.Millisecond
-	chTaskReadyToSend := make(chan domain.Task, 100000)
+	taskReadyToSend := make(chan domain.Task, 100000)
 
-	monitoringMock := &monitoring_service.MonitoringMock{
-		InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
-		PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
-	}
 	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(tasks []domain.Task) error {
 		assert.Equal(t, <-expTasksLen, len(tasks), "bunch of tasks has not correct length")
 		time.Sleep(confirmationDuration)
@@ -49,7 +44,7 @@ func TestConfirmation(t *testing.T) {
 		return nil
 	}}
 
-	senderService := New(taskManagerMock, chTaskReadyToSend, &error_service.ErrorHandlerMock{}, monitoringMock, &Options{
+	senderService := New(taskManagerMock, taskReadyToSend, &error_service.ErrorHandlerMock{}, &monitoring_service.MonitoringMock{}, &Options{
 		BatchMaxItems: 1000,
 		BatchTimeout:  50 * time.Millisecond,
 	})
@@ -62,13 +57,13 @@ func TestConfirmation(t *testing.T) {
 		}
 	}()
 
-	go createTasks(chTaskReadyToSend, 200)
+	go createTasks(taskReadyToSend, 200)
 	time.Sleep(25 * time.Millisecond)
-	go createTasks(chTaskReadyToSend, 200)
+	go createTasks(taskReadyToSend, 200)
 	time.Sleep(125 * time.Millisecond)
-	go createTasks(chTaskReadyToSend, 1500)
+	go createTasks(taskReadyToSend, 1500)
 	time.Sleep(75 * time.Millisecond)
-	go createTasks(chTaskReadyToSend, 3300)
+	go createTasks(taskReadyToSend, 3300)
 
 	//waiting for tasks to be processed
 	time.Sleep(time.Second)
@@ -80,7 +75,7 @@ func TestConsuming(t *testing.T) {
 
 	tries := 10
 	countTasks := 6
-	chTaskReadyToSend := make(chan domain.Task, countTasks)
+	taskReadyToSend := make(chan domain.Task, countTasks)
 
 	success := make(chan bool, tries)
 	success <- true
@@ -94,19 +89,20 @@ func TestConsuming(t *testing.T) {
 	success <- false
 	success <- true
 
-	monitoringMock := &monitoring_service.MonitoringMock{
-		InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
-		PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
-	}
-
 	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(tasks []domain.Task) error {
 		assert.Len(t, tasks, countTasks, "count task is not correct")
 		return nil
 	}}
 
-	senderService := New(taskManagerMock, chTaskReadyToSend, &error_service.ErrorHandlerMock{}, monitoringMock, nil)
+	senderService := New(
+		taskManagerMock,
+		taskReadyToSend,
+		&error_service.ErrorHandlerMock{},
+		&monitoring_service.MonitoringMock{},
+		nil,
+	)
 
-	createTasks(chTaskReadyToSend, countTasks)
+	createTasks(taskReadyToSend, countTasks)
 	go senderService.Run()
 
 	actualTries := 0

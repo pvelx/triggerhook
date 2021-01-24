@@ -1,4 +1,4 @@
-package triggerHook
+package triggerhook
 
 import (
 	"github.com/pvelx/triggerhook/connection"
@@ -24,13 +24,13 @@ type Config struct {
 	PreloaderServiceOptions  preloader_service.Options
 }
 
-func Build(config Config) contracts.TasksDeferredInterface {
+func Build(config Config) contracts.TriggerHookInterface {
 
 	errorService := error_service.New(&config.ErrorServiceOptions)
 	monitoringService := monitoring_service.New(&config.MonitoringServiceOptions)
 
 	repositoryService := repository.New(
-		connection.NewMysqlClient(&config.Connection),
+		connection.New(&config.Connection),
 		util.NewId(),
 		errorService,
 		&config.RepositoryOptions,

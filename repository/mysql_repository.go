@@ -34,7 +34,7 @@ type Options struct {
 func New(
 	client *sql.DB,
 	appInstanceId string,
-	eer contracts.EventErrorHandlerInterface,
+	eh contracts.EventHandlerInterface,
 	options *Options,
 ) contracts.RepositoryInterface {
 
@@ -52,7 +52,7 @@ func New(
 	return &mysqlRepository{
 		client,
 		appInstanceId,
-		eer,
+		eh,
 		0,
 		options,
 	}
@@ -61,7 +61,7 @@ func New(
 type mysqlRepository struct {
 	client            *sql.DB
 	appInstanceId     string
-	eer               contracts.EventErrorHandlerInterface
+	eh                contracts.EventHandlerInterface
 	cleanRequestCount int32
 	options           *Options
 }
@@ -69,9 +69,9 @@ type mysqlRepository struct {
 func (r *mysqlRepository) Count() (int, error) {
 	var count int
 	if err := r.client.QueryRow("SELECT count(*) FROM task").Scan(&count); err != nil {
-		r.eer.New(contracts.LevelError, err.Error(), nil)
+		r.eh.New(contracts.LevelError, err.Error(), nil)
 
-		return 0, contracts.FailCountingTasks
+		return 0, contracts.RepoErrorCountingTasks
 	}
 
 	return count, nil
@@ -88,18 +88,18 @@ func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 	}
 
 	if _, err := r.client.Exec(createTaskQuery, args...); err != nil {
-		errCreating := contracts.FailCreatingTask
+		errCreating := contracts.RepoErrorCreatingTask
 
 		if err, ok := err.(*mysql.MySQLError); ok {
 			switch {
 			case err.Number == mysqlerr.ER_DUP_ENTRY:
-				errCreating = contracts.TaskExist
+				errCreating = contracts.RepoErrorTaskExist
 			case err.Number == mysqlerr.ER_LOCK_DEADLOCK:
-				errCreating = contracts.Deadlock
+				errCreating = contracts.RepoErrorDeadlock
 			}
 		}
 
-		r.eer.New(contracts.LevelError, err.Error(), map[string]interface{}{"task": task})
+		r.eh.New(contracts.LevelError, err.Error(), map[string]interface{}{"task": task})
 
 		return errCreating
 	}
@@ -108,7 +108,6 @@ func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 }
 
 func (r *mysqlRepository) Delete(tasks []domain.Task) (int64, error) {
-	//fmt.Println(fmt.Sprintf("DEBUG Repository Delete: start deleting %d tasks", len(tasks)))
 	if len(tasks) == 0 {
 		return 0, nil
 	}
@@ -123,16 +122,16 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (int64, error) {
 
 	result, errDeleting := r.client.Exec(deletingTaskQuery, args...)
 	if errDeleting != nil {
-		errorReturn := contracts.FailDeletingTask
+		errorReturn := contracts.RepoErrorDeletingTask
 
 		if err, ok := errDeleting.(*mysql.MySQLError); ok {
 			switch {
 			case err.Number == mysqlerr.ER_LOCK_DEADLOCK:
-				errorReturn = contracts.Deadlock
+				errorReturn = contracts.RepoErrorDeadlock
 			}
 		}
 
-		r.eer.New(contracts.LevelError, errDeleting.Error(), nil)
+		r.eh.New(contracts.LevelError, errDeleting.Error(), nil)
 
 		return 0, errorReturn
 	}
@@ -148,7 +147,7 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (int64, error) {
 		atomic.LoadInt32(&r.cleanRequestCount)%int32(r.options.CleaningFrequency) == 0 {
 
 		if err := r.deleteEmptyCollections(); err != nil {
-			r.eer.New(contracts.LevelError, err.Error(), nil)
+			r.eh.New(contracts.LevelError, err.Error(), nil)
 		}
 		atomic.StoreInt32(&r.cleanRequestCount, 0)
 	}
@@ -170,7 +169,7 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 
 	defer func() {
 		if err := rows.Close(); err != nil {
-			r.eer.New(contracts.LevelError, err.Error(), nil)
+			r.eh.New(contracts.LevelError, err.Error(), nil)
 		}
 	}()
 
@@ -186,8 +185,6 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 		return errors.Wrap(err, "scan collection error")
 	}
 
-	//fmt.Println(fmt.Sprintf("DEBUG Repository deleteEmptyCollections: found %d collections to delete", len(collectionsIds)))
-
 	if len(ids) > 0 {
 		deleteCollectionsQuery := fmt.Sprintf("DELETE FROM collection c WHERE id IN(?%s)",
 			strings.Repeat(",?", len(ids)-1))
@@ -195,8 +192,6 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 		if _, err := r.client.Exec(deleteCollectionsQuery, ids...); err != nil {
 			return errors.Wrap(err, "clearing collections was fail")
 		}
-
-		//fmt.Println(fmt.Sprintf("DEBUG Repository deleteEmptyCollections: cleaned %d empty collections", affected))
 	}
 
 	return nil
@@ -210,36 +205,34 @@ func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks []doma
 
 	rows, errFinding := r.client.Query(queryFindBySecToExecTime, collectionId)
 	if errFinding != nil {
-		error = contracts.FailGettingTasks
-		r.eer.New(contracts.LevelError, errFinding.Error(), map[string]interface{}{"collection id": collectionId})
+		error = contracts.RepoErrorGettingTasks
+		r.eh.New(contracts.LevelError, errFinding.Error(), map[string]interface{}{"collection id": collectionId})
 
 		return
 	}
 
 	defer func() {
 		if err := rows.Close(); err != nil {
-			r.eer.New(contracts.LevelError, err.Error(), nil)
+			r.eh.New(contracts.LevelError, err.Error(), nil)
 		}
 	}()
 
 	for rows.Next() {
 		var task domain.Task
 		if err := rows.Scan(&task.Id, &task.ExecTime); err != nil {
-			error = contracts.FailGettingTasks
-			r.eer.New(contracts.LevelError, err.Error(), map[string]interface{}{"collection id": collectionId})
+			error = contracts.RepoErrorGettingTasks
+			r.eh.New(contracts.LevelError, err.Error(), map[string]interface{}{"collection id": collectionId})
 
 			return
 		}
 		tasks = append(tasks, task)
 	}
 	if err := rows.Err(); err != nil {
-		error = contracts.FailGettingTasks
-		r.eer.New(contracts.LevelError, err.Error(), map[string]interface{}{"collection id": collectionId})
+		error = contracts.RepoErrorGettingTasks
+		r.eh.New(contracts.LevelError, err.Error(), map[string]interface{}{"collection id": collectionId})
 
 		return
 	}
-
-	//fmt.Println(fmt.Sprintf("DEBUG Repository getTasksByCollection: get %d tasks of collection %d", len(results), collectionId))
 
 	return
 }
@@ -247,13 +240,13 @@ func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks []doma
 func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration) (collection contracts.CollectionsInterface, error error) {
 	toNextExecTime := time.Now().Add(preloadingTimeRange).Unix()
 	ctx := context.Background()
-	//fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: begin tx collection"))
+
 	tx, errTx := r.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
 	})
 	if errTx != nil {
-		error = contracts.FailFindingTasks
-		r.eer.New(contracts.LevelError, errTx.Error(), nil)
+		error = contracts.RepoErrorFindingTasks
+		r.eh.New(contracts.LevelError, errTx.Error(), nil)
 
 		return
 	}
@@ -266,12 +259,12 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 
 	rows, errFinding := tx.QueryContext(ctx, queryFindBySecToExecTime, toNextExecTime, r.appInstanceId)
 	if errFinding != nil {
-		error = contracts.FailFindingTasks
+		error = contracts.RepoErrorFindingTasks
 
 		if err, ok := errFinding.(*mysql.MySQLError); ok {
 			switch {
 			case err.Number == mysqlerr.ER_LOCK_DEADLOCK:
-				error = contracts.Deadlock
+				error = contracts.RepoErrorDeadlock
 			}
 		}
 
@@ -279,14 +272,14 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 		if err := tx.Rollback(); err != nil {
 			childError = errors.Wrap(childError, err.Error())
 		}
-		r.eer.New(contracts.LevelError, childError.Error(), nil)
+		r.eh.New(contracts.LevelError, childError.Error(), nil)
 
 		return
 	}
 
 	defer func() {
 		if err := rows.Close(); err != nil {
-			r.eer.New(contracts.LevelError, err.Error(), nil)
+			r.eh.New(contracts.LevelError, err.Error(), nil)
 		}
 	}()
 
@@ -296,8 +289,8 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 	for rows.Next() {
 		var collectionId int64
 		if err := rows.Scan(&collectionId); err != nil {
-			error = contracts.FailFindingTasks
-			r.eer.New(contracts.LevelError, err.Error(), nil)
+			error = contracts.RepoErrorFindingTasks
+			r.eh.New(contracts.LevelError, err.Error(), nil)
 
 			return
 		}
@@ -311,35 +304,32 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 			childError = errors.Wrap(childError, err.Error())
 		}
 
-		error = contracts.FailFindingTasks
-		r.eer.New(contracts.LevelError, childError.Error(), nil)
+		error = contracts.RepoErrorFindingTasks
+		r.eh.New(contracts.LevelError, childError.Error(), nil)
 
 		return
 	}
 
-	//fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: get %d collections", len(collectionIds)))
-
 	if len(collectionIds) == 0 {
-		//fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: end tx collection"))
 		if err := tx.Commit(); err != nil {
-			error = contracts.FailFindingTasks
-			r.eer.New(contracts.LevelError, err.Error(), nil)
+			error = contracts.RepoErrorFindingTasks
+			r.eh.New(contracts.LevelError, err.Error(), nil)
 			return
 		}
-		return nil, contracts.NoTasksFound
+		return nil, contracts.RepoErrorNoTasksFound
 	}
 
 	newQueryLockTasks := fmt.Sprintf("UPDATE collection SET taken_by_instance = ? WHERE id IN(?%s)",
 		strings.Repeat(",?", len(collectionIds)-1))
 
 	if _, err := tx.ExecContext(ctx, newQueryLockTasks, args...); err != nil {
-		error = contracts.FailFindingTasks
+		error = contracts.RepoErrorFindingTasks
 		childError := err
 
 		if err, ok := err.(*mysql.MySQLError); ok {
 			switch {
 			case err.Number == mysqlerr.ER_LOCK_DEADLOCK:
-				error = contracts.Deadlock
+				error = contracts.RepoErrorDeadlock
 			}
 		}
 
@@ -347,15 +337,14 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 			childError = errors.Wrap(childError, err.Error())
 		}
 
-		r.eer.New(contracts.LevelError, childError.Error(), nil)
+		r.eh.New(contracts.LevelError, childError.Error(), nil)
 
 		return
 	}
 
-	//fmt.Println(fmt.Sprintf("DEBUG Repository FindBySecToExecTime: end tx collection"))
 	if err := tx.Commit(); err != nil {
-		error = contracts.FailFindingTasks
-		r.eer.New(contracts.LevelError, err.Error(), nil)
+		error = contracts.RepoErrorFindingTasks
+		r.eh.New(contracts.LevelError, err.Error(), nil)
 
 		return
 	}
@@ -375,8 +364,8 @@ func (r *mysqlRepository) Up() (error error) {
 		Isolation: sql.LevelRepeatableRead,
 	})
 	if errorTx != nil {
-		error = contracts.FailSchemaSetup
-		r.eer.New(contracts.LevelError, errorTx.Error(), nil)
+		error = contracts.RepoErrorSchemaSetup
+		r.eh.New(contracts.LevelError, errorTx.Error(), nil)
 
 		return
 	}
@@ -395,8 +384,8 @@ func (r *mysqlRepository) Up() (error error) {
 			childError = errors.Wrap(childError, err.Error())
 		}
 
-		error = contracts.FailSchemaSetup
-		r.eer.New(contracts.LevelError, childError.Error(), nil)
+		error = contracts.RepoErrorSchemaSetup
+		r.eh.New(contracts.LevelError, childError.Error(), nil)
 
 		return
 	}
@@ -414,8 +403,8 @@ func (r *mysqlRepository) Up() (error error) {
 			childError = errors.Wrap(childError, err.Error())
 		}
 
-		error = contracts.FailSchemaSetup
-		r.eer.New(contracts.LevelError, childError.Error(), nil)
+		error = contracts.RepoErrorSchemaSetup
+		r.eh.New(contracts.LevelError, childError.Error(), nil)
 
 		return
 	}
@@ -461,21 +450,21 @@ func (r *mysqlRepository) Up() (error error) {
 	if _, errorQuery := tx.ExecContext(ctx, createCreateTaskProcedure); errorQuery != nil {
 		mysqlErr, ok := errorQuery.(*mysql.MySQLError)
 		if !ok || mysqlErr.Number != mysqlerr.ER_SP_ALREADY_EXISTS {
-			error = contracts.FailSchemaSetup
+			error = contracts.RepoErrorSchemaSetup
 			childError := errorQuery
 			if err := tx.Rollback(); err != nil {
 				childError = errors.Wrap(childError, err.Error())
 			}
 
-			r.eer.New(contracts.LevelError, childError.Error(), nil)
+			r.eh.New(contracts.LevelError, childError.Error(), nil)
 
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		error = contracts.FailFindingTasks
-		r.eer.New(contracts.LevelError, err.Error(), nil)
+		error = contracts.RepoErrorFindingTasks
+		r.eh.New(contracts.LevelError, err.Error(), nil)
 
 		return
 	}
@@ -506,7 +495,7 @@ func (c *Collections) Next() ([]domain.Task, error) {
 
 	id, isEnd := c.takeCollectionId()
 	if isEnd {
-		return nil, contracts.NoCollections
+		return nil, contracts.RepoErrorNoCollections
 	}
 
 	tasks, err := c.r.getTasksByCollection(id)

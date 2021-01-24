@@ -3,6 +3,7 @@ package connection
 import (
 	"database/sql"
 	"fmt"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/imdario/mergo"
 )
@@ -16,7 +17,7 @@ type Options struct {
 	MaxOpenConns int
 }
 
-func NewMysqlClient(options *Options) *sql.DB {
+func New(options *Options) *sql.DB {
 
 	if options == nil {
 		options = &Options{}

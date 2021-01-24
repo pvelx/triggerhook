@@ -44,38 +44,38 @@ func TestSendEvent(t *testing.T) {
 			eventMessage: "test level error",
 		},
 	}
-	eventDebugCh := make(chan contracts.EventError, 1)
-	eventErrorCh := make(chan contracts.EventError, 1)
-	eventFatalCh := make(chan contracts.EventError, 1)
-	errorCh := make(chan error, 1)
+	eventDebug := make(chan contracts.EventError, 1)
+	eventError := make(chan contracts.EventError, 1)
+	eventFatal := make(chan contracts.EventError, 1)
+	err := make(chan error, 1)
 
-	eventErrorHandler := New(&Options{
+	eventHandler := New(&Options{
 		EventHandlers: map[contracts.Level]func(event contracts.EventError){
-			contracts.LevelDebug: func(event contracts.EventError) { eventDebugCh <- event },
-			contracts.LevelError: func(event contracts.EventError) { eventErrorCh <- event },
-			contracts.LevelFatal: func(event contracts.EventError) { eventFatalCh <- event },
+			contracts.LevelDebug: func(event contracts.EventError) { eventDebug <- event },
+			contracts.LevelError: func(event contracts.EventError) { eventError <- event },
+			contracts.LevelFatal: func(event contracts.EventError) { eventFatal <- event },
 		},
-		Debug:      true,
-		ChEventCap: 0,
+		Debug:    true,
+		EventCap: 0,
 	})
 
 	go func() {
-		errorCh <- eventErrorHandler.Run()
+		err <- eventHandler.Run()
 	}()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			eventErrorHandler.New(test.level, test.eventMessage, test.extra)
+			eventHandler.New(test.level, test.eventMessage, test.extra)
 			var event contracts.EventError
 
 			select {
-			case event = <-eventDebugCh:
+			case event = <-eventDebug:
 				assert.Equal(t, contracts.LevelDebug, event.Level, "must be level debug")
-			case event = <-eventErrorCh:
+			case event = <-eventError:
 				assert.Equal(t, contracts.LevelError, event.Level, "must be level error")
-			case event = <-eventFatalCh:
+			case event = <-eventFatal:
 				assert.Equal(t, contracts.LevelFatal, event.Level, "must be level fatal")
-				assert.Equal(t, errors.New(test.eventMessage), <-errorCh, "must be level fatal")
+				assert.Equal(t, errors.New(test.eventMessage), <-err, "must be level fatal")
 			case <-time.After(time.Second):
 				assert.Fail(t, "does not receive error")
 			}

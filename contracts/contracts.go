@@ -34,10 +34,10 @@ type PrioritizedTaskListInterface interface {
 }
 
 /*	--------------------------------------------------
-	Task sender
+	Sender service
 */
 
-type TaskSenderInterface interface {
+type SenderServiceInterface interface {
 	Run()
 	Consume() TaskToSendInterface
 }
@@ -85,29 +85,29 @@ type CollectionsInterface interface {
 }
 
 var (
-	FailCountingTasks = errors.New("counting the task was fail")
-	FailCreatingTask  = errors.New("creating the task was fail")
-	FailDeletingTask  = errors.New("deleting the task was fail")
-	FailGettingTasks  = errors.New("getting the tasks were fail")
-	FailFindingTasks  = errors.New("finding the tasks were fail")
-	NoTasksFound      = errors.New("no tasks found")
-	NoCollections     = errors.New("collections are over")
-	TaskExist         = errors.New("task with the uuid already exist")
-	Deadlock          = errors.New("deadlock, please retry")
-	FailSchemaSetup   = errors.New("schema setup failed")
+	RepoErrorCountingTasks = errors.New("counting the task was fail")
+	RepoErrorCreatingTask  = errors.New("creating the task was fail")
+	RepoErrorDeletingTask  = errors.New("deleting the task was fail")
+	RepoErrorGettingTasks  = errors.New("getting the tasks were fail")
+	RepoErrorFindingTasks  = errors.New("finding the tasks were fail")
+	RepoErrorNoTasksFound  = errors.New("no tasks found")
+	RepoErrorNoCollections = errors.New("collections are over")
+	RepoErrorTaskExist     = errors.New("task with the uuid already exist")
+	RepoErrorDeadlock      = errors.New("deadlock, please retry")
+	RepoErrorSchemaSetup   = errors.New("schema setup failed")
 )
 
 /*	--------------------------------------------------
 	Preloading task service
 */
-type PreloadingTaskServiceInterface interface {
+type PreloadingServiceInterface interface {
 	AddNewTask(task *domain.Task) error
 	GetPreloadedChan() <-chan domain.Task
 	Run()
 }
 
 /*	--------------------------------------------------
-	Waiting service
+	Waiting task service
 */
 type WaitingServiceInterface interface {
 	CancelIfExist(taskId string) error
@@ -148,7 +148,7 @@ type EventError struct {
 	Extra        interface{}
 }
 
-type EventErrorHandlerInterface interface {
+type EventHandlerInterface interface {
 	/*
 		Throws new event. May be used parallel
 	*/
@@ -178,14 +178,14 @@ const (
 	VelocityMetricType
 
 	/*
-
-	 */
+		Summarizes the measured values. Does not depend on the measurement period
+	*/
 	IntegralMetricType
 )
 
 var (
-	TopicIsNotInitialized = errors.New("the topic is not initialized")
-	TopicExist            = errors.New("the topic exist")
+	MonitoringErrorTopicIsNotInitialized = errors.New("the topic is not initialized")
+	MonitoringErrorTopicExist            = errors.New("the topic exist")
 )
 
 type MeasurementEvent struct {
@@ -226,38 +226,41 @@ var (
 	/*
 		Number of tasks waiting for confirmation after sending
 	*/
-	WaitingForConfirmation Topic = "waitingForConfirmation"
+	WaitingForConfirmation Topic = "waiting_for_confirmation"
 
 	/*
 		The rate of confirmation of the sending task
 	*/
-	SpeedOfConfirmation Topic = "speedOfConfirmation"
+	ConfirmationRate Topic = "confirmation_rate"
 
 	/*
-		Number of tasks waiting to be sent
+		Number of preloaded tasks
 	*/
 	Preloaded Topic = "preloaded"
 
 	/*
 		Speed of preloading
 	*/
-	SpeedOfPreloading Topic = "speedOfPreloading"
+	PreloadingRate Topic = "preloading_rate"
 
 	/*
-		Tasks ready to send
+		Number of tasks waiting for sending
 	*/
-	CountOfWaitingForSending Topic = "countOfWaitingForSending"
+	WaitingForSending Topic = "waiting_for_sending"
 
-	SpeedOfCreating Topic = "speedOfCreating"
+	CreatingRate Topic = "creating_rate"
 
-	SpeedOfDeleting Topic = "speedOfDeleting"
+	DeletingRate Topic = "deleting_rate"
 
-	SpeedOfSending Topic = "speedOfSending"
+	SendingRate Topic = "sending_rate"
 
-	CountOfAllTasks Topic = "countOfAllTasks"
+	/*
+		Number of all tasks
+	*/
+	All Topic = "all"
 )
 
-type TasksDeferredInterface interface {
+type TriggerHookInterface interface {
 	Create(task *domain.Task) error
 
 	Delete(taskId string) error

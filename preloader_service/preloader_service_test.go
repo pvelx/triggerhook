@@ -2,7 +2,6 @@ package preloader_service
 
 import (
 	"fmt"
-	"github.com/pvelx/triggerhook/monitoring_service"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/pvelx/triggerhook/contracts"
 	"github.com/pvelx/triggerhook/domain"
 	"github.com/pvelx/triggerhook/error_service"
+	"github.com/pvelx/triggerhook/monitoring_service"
 	"github.com/pvelx/triggerhook/repository"
 	"github.com/pvelx/triggerhook/task_manager"
 	"github.com/pvelx/triggerhook/util"
@@ -23,13 +23,7 @@ func TestTaskAdding(t *testing.T) {
 		return nil
 	}}
 
-	monitoringMock := &monitoring_service.MonitoringMock{
-		InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
-		PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
-		ListenMock:  func(topic contracts.Topic, callback func() int64) error { return nil },
-	}
-
-	preloadingTaskService := New(taskManagerMock, nil, monitoringMock, nil)
+	preloadingService := New(taskManagerMock, nil, &monitoring_service.MonitoringMock{}, nil)
 
 	now := time.Now().Unix()
 	tests := []struct {
@@ -46,16 +40,16 @@ func TestTaskAdding(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			chPreloadedTask := preloadingTaskService.GetPreloadedChan()
-			if err := preloadingTaskService.AddNewTask(&tt.task); err != nil {
+			preloadedTask := preloadingService.GetPreloadedChan()
+			if err := preloadingService.AddNewTask(&tt.task); err != nil {
 				t.Fatal(err)
 			}
 			assert.Equal(t, tt.isTakenExpected, isTakenActual, "The task must be taken")
 			if tt.isTakenExpected {
-				assert.Equal(t, 1, len(chPreloadedTask), "Len of channel is wrong")
-				assert.Equal(t, tt.task, <-chPreloadedTask, "The task must be send in channel")
+				assert.Equal(t, 1, len(preloadedTask), "Len of channel is wrong")
+				assert.Equal(t, tt.task, <-preloadedTask, "The task must be send in channel")
 			} else {
-				assert.Len(t, chPreloadedTask, 0, "Len of channel is wrong")
+				assert.Len(t, preloadedTask, 0, "Len of channel is wrong")
 			}
 		})
 	}
@@ -137,27 +131,26 @@ func TestMainFlow(t *testing.T) {
 					/*
 						Collections of tasks were ended
 					*/
-					return nil, contracts.NoCollections
+					return nil, contracts.RepoErrorNoCollections
 				}}, nil
 			}
 
 			/*
 				Tasks with a suitable time of execute not found
 			*/
-			return nil, contracts.NoTasksFound
+			return nil, contracts.RepoErrorNoTasksFound
 		},
 	}
 
-	monitoringMock := &monitoring_service.MonitoringMock{
-		InitMock:    func(topic contracts.Topic, metricType contracts.MetricType) error { return nil },
-		PublishMock: func(topic contracts.Topic, measurement int64) error { return nil },
-		ListenMock:  func(topic contracts.Topic, callback func() int64) error { return nil },
-	}
+	preloadingService := New(
+		taskManagerMock,
+		&error_service.ErrorHandlerMock{},
+		&monitoring_service.MonitoringMock{},
+		nil,
+	)
 
-	preloadingTaskService := New(taskManagerMock, &error_service.ErrorHandlerMock{}, monitoringMock, nil)
-
-	chPreloadedTask := preloadingTaskService.GetPreloadedChan()
-	go preloadingTaskService.Run()
+	preloadedTask := preloadingService.GetPreloadedChan()
+	go preloadingService.Run()
 
 	receivedTasks := make(map[string]domain.Task)
 
@@ -166,12 +159,12 @@ func TestMainFlow(t *testing.T) {
 	for _, item := range data {
 		for _, collection := range item.collections {
 
-			if len(chPreloadedTask) == 0 {
+			if len(preloadedTask) == 0 {
 				t.Fatal("tasks was received not enough")
 			}
 
 			for i := 0; i < collection.TaskCount; i++ {
-				taskActual := <-chPreloadedTask
+				taskActual := <-preloadedTask
 				if _, exist := receivedTasks[taskActual.Id]; exist {
 					t.Fatal(fmt.Sprintf("task '%s' already received", taskActual.Id))
 				}
@@ -179,5 +172,5 @@ func TestMainFlow(t *testing.T) {
 			}
 		}
 	}
-	assert.Equal(t, 0, len(chPreloadedTask), "was received extra task")
+	assert.Equal(t, 0, len(preloadedTask), "was received extra task")
 }

@@ -55,7 +55,7 @@ func TestMainFlow(t *testing.T) {
 
 			monitoringService := New(&Options{
 				PeriodMeasure: test.periodMeasure,
-				EventChCap:    1000000,
+				EventCap:      1000000,
 				Subscriptions: map[contracts.Topic]func(event contracts.MeasurementEvent){
 					topicName: func(measurementEvent contracts.MeasurementEvent) {
 						actualMeasurementCh <- measurementEvent
@@ -70,10 +70,10 @@ func TestMainFlow(t *testing.T) {
 			go monitoringService.Run()
 			time.Sleep(10 * time.Millisecond)
 
-			blockCh := make(chan bool)
+			wait := make(chan bool)
 			for worker := 0; worker < 2; worker++ {
 				go func() {
-					<-blockCh
+					<-wait
 					for _, measure := range test.inputMeasurement {
 						if err := monitoringService.Publish(topicName, measure); err != nil {
 							t.Fatal(err)
@@ -82,7 +82,7 @@ func TestMainFlow(t *testing.T) {
 					}
 				}()
 			}
-			close(blockCh)
+			close(wait)
 
 			for i := 0; i < len(test.expectedMeasurementEvent); i++ {
 				assert.Equal(t,

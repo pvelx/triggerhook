@@ -10,8 +10,15 @@ import (
 	"github.com/pvelx/triggerhook/connection"
 )
 
+var (
+	mysqlUser     = os.Getenv("DATABASE_USER")
+	mysqlPassword = os.Getenv("DATABASE_PASSWORD")
+	mysqlHost     = os.Getenv("DATABASE_HOST")
+	mysqlDbName   = os.Getenv("DATABASE_NAME")
+)
+
 func clear() {
-	conn := connection.NewMysqlClient(nil)
+	conn := connection.New(nil)
 	if _, err := conn.Exec("DELETE FROM task"); err != nil {
 		log.Fatal(err)
 	}

@@ -2,10 +2,10 @@ package error_service
 
 import (
 	"errors"
-	"github.com/imdario/mergo"
 	"runtime"
 	"time"
 
+	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerhook/contracts"
 )
 
@@ -15,39 +15,39 @@ type Options struct {
 	*/
 	EventHandlers map[contracts.Level]func(event contracts.EventError)
 	Debug         bool
-	ChEventCap    int
+	EventCap      int
 }
 
-func New(options *Options) contracts.EventErrorHandlerInterface {
+func New(options *Options) contracts.EventHandlerInterface {
 
 	if options == nil {
 		options = &Options{}
 	}
 
 	if err := mergo.Merge(options, Options{
-		Debug:      false,
-		ChEventCap: 1000000,
+		Debug:    false,
+		EventCap: 1000000,
 	}); err != nil {
 		panic(err)
 	}
 
-	return &EventErrorHandler{
-		chEvent:       make(chan contracts.EventError, options.ChEventCap),
+	return &EventHandler{
+		event:         make(chan contracts.EventError, options.EventCap),
 		eventHandlers: options.EventHandlers,
 		debug:         options.Debug,
 	}
 }
 
-type EventErrorHandler struct {
-	chEvent       chan contracts.EventError
+type EventHandler struct {
+	event         chan contracts.EventError
 	eventHandlers map[contracts.Level]func(event contracts.EventError)
 	debug         bool
-	contracts.EventErrorHandlerInterface
+	contracts.EventHandlerInterface
 }
 
-func (eeh *EventErrorHandler) New(level contracts.Level, eventMessage string, extra map[string]interface{}) {
+func (eh *EventHandler) New(level contracts.Level, eventMessage string, extra map[string]interface{}) {
 
-	if !eeh.debug && level == contracts.LevelDebug {
+	if !eh.debug && level == contracts.LevelDebug {
 		return
 	}
 
@@ -67,13 +67,13 @@ func (eeh *EventErrorHandler) New(level contracts.Level, eventMessage string, ex
 		eventError.Method = details.Name()
 	}
 
-	eeh.chEvent <- eventError
+	eh.event <- eventError
 }
 
-func (eeh *EventErrorHandler) Run() error {
-	for event := range eeh.chEvent {
+func (eh *EventHandler) Run() error {
+	for event := range eh.event {
 
-		eventHandler, ok := eeh.eventHandlers[event.Level]
+		eventHandler, ok := eh.eventHandlers[event.Level]
 		if !ok {
 			continue
 		}

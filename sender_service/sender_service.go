@@ -11,18 +11,18 @@ import (
 type Options struct {
 	BatchMaxItems            int
 	BatchTimeout             time.Duration
-	ChTasksToConfirmCap      int
-	ChBatchesCap             int
+	TasksToConfirmCap        int
+	BatchesCap               int
 	ConfirmationWorkersCount int
 }
 
 func New(
 	taskManager contracts.TaskManagerInterface,
-	chTasksReadyToSend chan domain.Task,
-	eeh contracts.EventErrorHandlerInterface,
+	tasksReadyToSend chan domain.Task,
+	eh contracts.EventHandlerInterface,
 	monitoring contracts.MonitoringInterface,
 	options *Options,
-) contracts.TaskSenderInterface {
+) contracts.SenderServiceInterface {
 
 	if options == nil {
 		options = &Options{}
@@ -31,101 +31,92 @@ func New(
 	if err := mergo.Merge(options, Options{
 		BatchMaxItems:            1000,
 		BatchTimeout:             50 * time.Millisecond,
-		ChTasksToConfirmCap:      10000000,
-		ChBatchesCap:             10000,
+		TasksToConfirmCap:        10000000,
+		BatchesCap:               10000,
 		ConfirmationWorkersCount: 5,
 	}); err != nil {
 		panic(err)
 	}
 
-	err := monitoring.Init(contracts.SpeedOfConfirmation, contracts.VelocityMetricType)
+	err := monitoring.Init(contracts.ConfirmationRate, contracts.VelocityMetricType)
 	if err != nil {
 		panic(err)
 	}
-	if err := monitoring.Init(contracts.SpeedOfSending, contracts.VelocityMetricType); err != nil {
+	if err := monitoring.Init(contracts.SendingRate, contracts.VelocityMetricType); err != nil {
 		panic(err)
 	}
 	if err := monitoring.Init(contracts.WaitingForConfirmation, contracts.IntegralMetricType); err != nil {
 		panic(err)
 	}
 
-	return &taskSender{
+	return &senderService{
 		taskManager:              taskManager,
-		chTasksToConfirm:         make(chan domain.Task, options.ChTasksToConfirmCap),
-		chTasksReadyToSend:       chTasksReadyToSend,
-		eeh:                      eeh,
+		tasksToConfirm:           make(chan domain.Task, options.TasksToConfirmCap),
+		tasksReadyToSend:         tasksReadyToSend,
+		eh:                       eh,
 		monitoring:               monitoring,
-		chBatchesCap:             options.ChBatchesCap,
+		batchesCap:               options.BatchesCap,
 		confirmationWorkersCount: options.ConfirmationWorkersCount,
 		batchTimeout:             options.BatchTimeout,
 		batchMaxItems:            options.BatchMaxItems,
 	}
 }
 
-type taskSender struct {
-	contracts.TaskSenderInterface
-	chTasksReadyToSend       chan domain.Task
-	chTasksToConfirm         chan domain.Task
+type senderService struct {
+	contracts.SenderServiceInterface
+	tasksReadyToSend         chan domain.Task
+	tasksToConfirm           chan domain.Task
 	taskManager              contracts.TaskManagerInterface
-	eeh                      contracts.EventErrorHandlerInterface
+	eh                       contracts.EventHandlerInterface
 	monitoring               contracts.MonitoringInterface
 	batchTimeout             time.Duration
 	confirmationWorkersCount int
 	batchMaxItems            int
-	chBatchesCap             int
+	batchesCap               int
 }
 
-func (s *taskSender) Run() {
-	batchTasksCh := s.generateBatch(s.chTasksToConfirm)
+func (s *senderService) Run() {
+	batchTasks := s.generateBatch(s.tasksToConfirm)
 
 	for w := 0; w < s.confirmationWorkersCount; w++ {
 		go func() {
-			for batch := range batchTasksCh {
+			for batch := range batchTasks {
 				if err := s.taskManager.ConfirmExecution(batch); err != nil {
-					s.eeh.New(contracts.LevelFatal, err.Error(), nil)
+					s.eh.New(contracts.LevelFatal, err.Error(), nil)
 				}
 
-				s.eeh.New(contracts.LevelDebug, "confirmed tasks", map[string]interface{}{
+				s.eh.New(contracts.LevelDebug, "confirmed tasks", map[string]interface{}{
 					"count of task": len(batch),
 				})
 
 				if err := s.monitoring.Publish(contracts.WaitingForConfirmation, int64(-len(batch))); err != nil {
-					s.eeh.New(contracts.LevelError, err.Error(), nil)
+					s.eh.New(contracts.LevelError, err.Error(), nil)
 				}
-				if err := s.monitoring.Publish(contracts.SpeedOfConfirmation, int64(len(batch))); err != nil {
-					s.eeh.New(contracts.LevelError, err.Error(), nil)
+				if err := s.monitoring.Publish(contracts.ConfirmationRate, int64(len(batch))); err != nil {
+					s.eh.New(contracts.LevelError, err.Error(), nil)
 				}
 			}
 		}()
 	}
 }
 
-func (s *taskSender) Consume() contracts.TaskToSendInterface {
-	return &taskToSend{
-		monitoring: s.monitoring,
-		eeh:        s.eeh,
-		chRollback: s.chTasksReadyToSend,
-		chConfirm:  s.chTasksToConfirm,
-		task:       <-s.chTasksReadyToSend,
-	}
-}
-
-func (s *taskSender) generateBatch(tasks <-chan domain.Task) chan []domain.Task {
-	batches := make(chan []domain.Task, s.chBatchesCap)
+func (s *senderService) generateBatch(tasks <-chan domain.Task) chan []domain.Task {
+	batches := make(chan []domain.Task, s.batchesCap)
 
 	go func() {
 		for {
 			var batch []domain.Task
-			expire := time.After(s.batchTimeout)
+			expire := time.NewTimer(s.batchTimeout)
 			for {
 				select {
 				case value := <-tasks:
 					batch = append(batch, value)
 					if len(batch) == s.batchMaxItems {
+						expire.Stop()
 						goto done
 					}
 
-				case <-expire:
+				case <-expire.C:
 					goto done
 				}
 			}
@@ -135,10 +126,10 @@ func (s *taskSender) generateBatch(tasks <-chan domain.Task) chan []domain.Task 
 				batches <- batch
 
 				if err := s.monitoring.Publish(contracts.WaitingForConfirmation, int64(len(batch))); err != nil {
-					s.eeh.New(contracts.LevelError, err.Error(), nil)
+					s.eh.New(contracts.LevelError, err.Error(), nil)
 				}
 				if len(batches) == cap(batches) {
-					s.eeh.New(contracts.LevelError, "channel is full", nil)
+					s.eh.New(contracts.LevelError, "channel is full", nil)
 				}
 			}
 		}
@@ -149,11 +140,21 @@ func (s *taskSender) generateBatch(tasks <-chan domain.Task) chan []domain.Task 
 
 type taskToSend struct {
 	monitoring  contracts.MonitoringInterface
-	eeh         contracts.EventErrorHandlerInterface
+	eh          contracts.EventHandlerInterface
 	isProcessed bool
-	chConfirm   chan domain.Task
-	chRollback  chan domain.Task
+	confirm     chan domain.Task
+	rollback    chan domain.Task
 	task        domain.Task
+}
+
+func (s *senderService) Consume() contracts.TaskToSendInterface {
+	return &taskToSend{
+		monitoring: s.monitoring,
+		eh:         s.eh,
+		rollback:   s.tasksReadyToSend,
+		confirm:    s.tasksToConfirm,
+		task:       <-s.tasksReadyToSend,
+	}
 }
 
 func (tts *taskToSend) Task() domain.Task {
@@ -162,18 +163,18 @@ func (tts *taskToSend) Task() domain.Task {
 
 func (tts *taskToSend) Confirm() {
 	if !tts.isProcessed {
-		if err := tts.monitoring.Publish(contracts.SpeedOfSending, 1); err != nil {
-			tts.eeh.New(contracts.LevelError, err.Error(), nil)
+		if err := tts.monitoring.Publish(contracts.SendingRate, 1); err != nil {
+			tts.eh.New(contracts.LevelError, err.Error(), nil)
 		}
 
 		tts.isProcessed = true
-		tts.chConfirm <- tts.task
+		tts.confirm <- tts.task
 	}
 }
 
 func (tts *taskToSend) Rollback() {
 	if !tts.isProcessed {
 		tts.isProcessed = true
-		tts.chRollback <- tts.task
+		tts.rollback <- tts.task
 	}
 }

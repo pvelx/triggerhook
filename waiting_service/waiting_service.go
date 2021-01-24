@@ -20,7 +20,7 @@ func New(
 	preloadedTasks <-chan domain.Task,
 	monitoring contracts.MonitoringInterface,
 	taskManager contracts.TaskManagerInterface,
-	eventHandler contracts.EventErrorHandlerInterface,
+	eventHandler contracts.EventHandlerInterface,
 	options *Options,
 ) contracts.WaitingServiceInterface {
 
@@ -43,7 +43,7 @@ func New(
 	}); err != nil {
 		panic(err)
 	}
-	if err := monitoring.Init(contracts.SpeedOfDeleting, contracts.VelocityMetricType); err != nil {
+	if err := monitoring.Init(contracts.DeletingRate, contracts.VelocityMetricType); err != nil {
 		panic(err)
 	}
 
@@ -55,7 +55,7 @@ func New(
 		greedyProcessingLimit: options.GreedyProcessingLimit,
 		monitoring:            monitoring,
 		taskManager:           taskManager,
-		eeh:                   eventHandler,
+		eh:                    eventHandler,
 	}
 
 	return service
@@ -69,7 +69,7 @@ type waitingService struct {
 	greedyProcessingLimit int
 	monitoring            contracts.MonitoringInterface
 	taskManager           contracts.TaskManagerInterface
-	eeh                   contracts.EventErrorHandlerInterface
+	eh                    contracts.EventHandlerInterface
 }
 
 func (s *waitingService) GetReadyToSendChan() chan domain.Task {
@@ -82,8 +82,8 @@ func (s *waitingService) CancelIfExist(taskId string) error {
 	}
 	s.canceledTasks <- taskId
 
-	if err := s.monitoring.Publish(contracts.SpeedOfDeleting, 1); err != nil {
-		s.eeh.New(contracts.LevelError, err.Error(), nil)
+	if err := s.monitoring.Publish(contracts.DeletingRate, 1); err != nil {
+		s.eh.New(contracts.LevelError, err.Error(), nil)
 	}
 
 	return nil

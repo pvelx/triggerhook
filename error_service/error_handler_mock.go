@@ -5,7 +5,7 @@ import (
 )
 
 type ErrorHandlerMock struct {
-	contracts.EventErrorHandlerInterface
+	contracts.EventHandlerInterface
 
 	/*
 		You need to substitute *Mock methods to do substitute original functions

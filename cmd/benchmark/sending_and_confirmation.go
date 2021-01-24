@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/cheggaaa/pb/v3"
 	"log"
 	"math/rand"
 	"sync"
 	"time"
 
+	"github.com/cheggaaa/pb/v3"
 	"github.com/pvelx/triggerhook"
 	"github.com/pvelx/triggerhook/connection"
 	"github.com/pvelx/triggerhook/contracts"
@@ -23,7 +23,7 @@ func upInitialState(taskCount int) {
 	fmt.Println("\nup initial state")
 	preparingBar := pb.StartNew(taskCount)
 
-	conn := connection.NewMysqlClient(nil)
+	conn := connection.New(nil)
 	errorService := error_service.New(nil)
 	repositoryService := repository.New(conn, util.NewId(), errorService, nil)
 
@@ -68,17 +68,17 @@ func sendingAndConfirmation(taskCount int) [][]string {
 	fmt.Println("\nsending/confirmation tasks")
 	preparingBar := pb.StartNew(taskCount)
 
-	triggerHookService := triggerHook.Build(triggerHook.Config{
+	triggerHookService := triggerhook.Build(triggerhook.Config{
 		Connection: connection.Options{
-			User:     "root",
-			Password: "secret",
-			Host:     "127.0.0.1:3306",
-			DbName:   "test_db",
+			User:     mysqlUser,
+			Password: mysqlPassword,
+			Host:     mysqlHost,
+			DbName:   mysqlDbName,
 		},
 		MonitoringServiceOptions: monitoring_service.Options{
 			PeriodMeasure: 100 * time.Millisecond,
 			Subscriptions: map[contracts.Topic]func(event contracts.MeasurementEvent){
-				contracts.SpeedOfConfirmation: func(event contracts.MeasurementEvent) {
+				contracts.ConfirmationRate: func(event contracts.MeasurementEvent) {
 					confirmed = confirmed + int(event.Measurement)
 					preparingBar.Add(int(event.Measurement))
 					if confirmed == taskCount {
