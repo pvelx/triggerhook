@@ -260,7 +260,11 @@ func TestCreateRaceCondition(t *testing.T) {
 func TestDeleteBunch(t *testing.T) {
 	clear()
 	loadFixtures("data_3")
-	repository := New(db, appInstanceId, &error_service.ErrorHandlerMock{}, &Options{
+	repository := New(db, appInstanceId, &error_service.ErrorHandlerMock{
+		NewMock: func(level contracts.Level, eventMessage string, extra map[string]interface{}) {
+			assert.Fail(t, fmt.Sprintf("not expected error: %s", eventMessage))
+		},
+	}, &Options{
 		MaxCountTasksInCollection: 1000,
 		CleaningFrequency:         1,
 	})

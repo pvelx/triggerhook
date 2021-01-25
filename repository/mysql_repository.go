@@ -186,7 +186,7 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 	}
 
 	if len(ids) > 0 {
-		deleteCollectionsQuery := fmt.Sprintf("DELETE FROM collection c WHERE id IN(?%s)",
+		deleteCollectionsQuery := fmt.Sprintf("DELETE FROM collection WHERE id IN(?%s)",
 			strings.Repeat(",?", len(ids)-1))
 
 		if _, err := r.client.Exec(deleteCollectionsQuery, ids...); err != nil {
@@ -350,7 +350,6 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 	}
 
 	collection = &Collections{
-		mu:          &sync.Mutex{},
 		collections: collectionIds,
 		r:           r,
 	}
@@ -473,14 +472,14 @@ func (r *mysqlRepository) Up() (error error) {
 }
 
 type Collections struct {
-	mu          *sync.Mutex
+	sync.Mutex
 	collections []int64
 	r           *mysqlRepository
 }
 
 func (c *Collections) takeCollectionId() (id int64, isEnd bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	if len(c.collections) == 0 {
 		return 0, true
