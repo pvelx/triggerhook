@@ -34,43 +34,43 @@ type heapPrioritizedTaskList struct {
 	sync.Mutex
 }
 
-func (tqh *heapPrioritizedTaskList) Add(task domain.Task) {
-	tqh.Lock()
-	defer tqh.Unlock()
+func (h *heapPrioritizedTaskList) Add(task domain.Task) {
+	h.Lock()
+	defer h.Unlock()
 	item := &item{
 		task:     task,
 		priority: task.ExecTime,
 	}
-	heap.Push(&tqh.pq, item)
-	tqh.index[task.Id] = &item.index
+	heap.Push(&h.pq, item)
+	h.index[task.Id] = &item.index
 }
 
-func (tqh *heapPrioritizedTaskList) DeleteIfExist(taskId string) bool {
-	tqh.Lock()
-	defer tqh.Unlock()
-	index, ok := tqh.index[taskId]
+func (h *heapPrioritizedTaskList) DeleteIfExist(taskId string) bool {
+	h.Lock()
+	defer h.Unlock()
+	index, ok := h.index[taskId]
 	if ok {
-		heap.Remove(&tqh.pq, *index)
-		delete(tqh.index, taskId)
+		heap.Remove(&h.pq, *index)
+		delete(h.index, taskId)
 	}
 
 	return ok
 }
 
-func (tqh *heapPrioritizedTaskList) Take() *domain.Task {
-	tqh.Lock()
-	defer tqh.Unlock()
-	if tqh.pq.Len() > 0 {
-		task := heap.Pop(&tqh.pq).(*item).task.(domain.Task)
-		delete(tqh.index, task.Id)
+func (h *heapPrioritizedTaskList) Take() *domain.Task {
+	h.Lock()
+	defer h.Unlock()
+	if h.pq.Len() > 0 {
+		task := heap.Pop(&h.pq).(*item).task.(domain.Task)
+		delete(h.index, task.Id)
 
 		return &task
 	}
 	return nil
 }
 
-func (tqh *heapPrioritizedTaskList) Len() int {
-	tqh.Lock()
-	defer tqh.Unlock()
-	return tqh.pq.Len()
+func (h *heapPrioritizedTaskList) Len() int {
+	h.Lock()
+	defer h.Unlock()
+	return h.pq.Len()
 }
