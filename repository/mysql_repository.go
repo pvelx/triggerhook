@@ -186,7 +186,7 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 	}
 
 	if len(ids) > 0 {
-		deleteCollectionsQuery := fmt.Sprintf("DELETE FROM collection c WHERE id IN(?%s)",
+		deleteCollectionsQuery := fmt.Sprintf("DELETE FROM collection WHERE id IN(?%s)",
 			strings.Repeat(",?", len(ids)-1))
 
 		if _, err := r.client.Exec(deleteCollectionsQuery, ids...); err != nil {
