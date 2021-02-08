@@ -10,7 +10,17 @@
 
 ### Принцип работы
 
-![Principle of operation](scheme-v4.gif)
+![Principle of operation](asset/scheme-v5.gif)
+
+Task  | Description
+------------------|----------------------
+![Task](asset/red.jpg)|a task whose launch time is not yet soon
+![Task](asset/yelow.jpg)|a task whose launch time is coming soon
+![Task](asset/green.jpg)|a task whose launch time has come
+![Task](asset/blue.jpg)|a task that was processed
+![Task](asset/gray.jpg)|not confirmed the status of the task in the database
+![Task](asset/black.jpg)|command to delete
+
 
 - При создании задачи она попадает в базу данных (квадратный блок).
 - В оперативную память подгружаются задачи (на схеме треугольный блок), 
