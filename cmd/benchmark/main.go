@@ -18,7 +18,12 @@ var (
 )
 
 func clear() {
-	conn := connection.New(nil)
+	conn := connection.New(&connection.Options{
+		User:     mysqlUser,
+		Password: mysqlPassword,
+		Host:     mysqlHost,
+		DbName:   mysqlDbName,
+	})
 	if _, err := conn.Exec("DELETE FROM task"); err != nil {
 		log.Fatal(err)
 	}
