@@ -305,6 +305,14 @@ func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration)
 		}
 
 		error = contracts.RepoErrorFindingTasks
+
+		if err, ok := err.(*mysql.MySQLError); ok {
+			switch {
+			case err.Number == mysqlerr.ER_LOCK_WAIT_TIMEOUT:
+				error = contracts.RepoErrorLockWaitTimeout
+			}
+		}
+
 		r.eh.New(contracts.LevelError, childError.Error(), nil)
 
 		return

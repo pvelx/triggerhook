@@ -85,16 +85,17 @@ type CollectionsInterface interface {
 }
 
 var (
-	RepoErrorCountingTasks = errors.New("counting the task was fail")
-	RepoErrorCreatingTask  = errors.New("creating the task was fail")
-	RepoErrorDeletingTask  = errors.New("deleting the task was fail")
-	RepoErrorGettingTasks  = errors.New("getting the tasks were fail")
-	RepoErrorFindingTasks  = errors.New("finding the tasks were fail")
-	RepoErrorNoTasksFound  = errors.New("no tasks found")
-	RepoErrorNoCollections = errors.New("collections are over")
-	RepoErrorTaskExist     = errors.New("task with the uuid already exist")
-	RepoErrorDeadlock      = errors.New("deadlock, please retry")
-	RepoErrorSchemaSetup   = errors.New("schema setup failed")
+	RepoErrorCountingTasks   = errors.New("counting the task was fail")
+	RepoErrorCreatingTask    = errors.New("creating the task was fail")
+	RepoErrorDeletingTask    = errors.New("deleting the task was fail")
+	RepoErrorGettingTasks    = errors.New("getting the tasks were fail")
+	RepoErrorFindingTasks    = errors.New("finding the tasks were fail")
+	RepoErrorNoTasksFound    = errors.New("no tasks found")
+	RepoErrorNoCollections   = errors.New("collections are over")
+	RepoErrorTaskExist       = errors.New("task with the uuid already exist")
+	RepoErrorDeadlock        = errors.New("deadlock, please retry")
+	RepoErrorLockWaitTimeout = errors.New("lock wait timeout exceeded")
+	RepoErrorSchemaSetup     = errors.New("schema setup failed")
 )
 
 /*	--------------------------------------------------
