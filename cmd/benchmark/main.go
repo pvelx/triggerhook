@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/pvelx/triggerhook/repository"
 	"log"
 	"os"
 
@@ -18,7 +19,14 @@ var (
 )
 
 func clear() {
-	conn := connection.New(nil)
+	conn := connection.New(&connection.Options{
+		User:     mysqlUser,
+		Password: mysqlPassword,
+		Host:     mysqlHost,
+		DbName:   mysqlDbName,
+	})
+	repository.New(conn, "", nil, nil).Up()
+
 	if _, err := conn.Exec("DELETE FROM task"); err != nil {
 		log.Fatal(err)
 	}
