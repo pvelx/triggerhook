@@ -134,7 +134,7 @@ func (s *taskManager) GetTasksToComplete(preloadingTimeRange time.Duration) (con
 	errFinding := s.retry(func() (err error) {
 		collections, err = s.repository.FindBySecToExecTime(preloadingTimeRange)
 		return
-	}, contracts.RepoErrorDeadlock)
+	}, contracts.RepoErrorDeadlock, contracts.RepoErrorLockWaitTimeout)
 
 	switch {
 	case errFinding == contracts.RepoErrorNoTasksFound:

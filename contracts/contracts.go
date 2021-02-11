@@ -85,16 +85,17 @@ type CollectionsInterface interface {
 }
 
 var (
-	RepoErrorCountingTasks = errors.New("counting the task was fail")
-	RepoErrorCreatingTask  = errors.New("creating the task was fail")
-	RepoErrorDeletingTask  = errors.New("deleting the task was fail")
-	RepoErrorGettingTasks  = errors.New("getting the tasks were fail")
-	RepoErrorFindingTasks  = errors.New("finding the tasks were fail")
-	RepoErrorNoTasksFound  = errors.New("no tasks found")
-	RepoErrorNoCollections = errors.New("collections are over")
-	RepoErrorTaskExist     = errors.New("task with the uuid already exist")
-	RepoErrorDeadlock      = errors.New("deadlock, please retry")
-	RepoErrorSchemaSetup   = errors.New("schema setup failed")
+	RepoErrorCountingTasks   = errors.New("counting the task was fail")
+	RepoErrorCreatingTask    = errors.New("creating the task was fail")
+	RepoErrorDeletingTask    = errors.New("deleting the task was fail")
+	RepoErrorGettingTasks    = errors.New("getting the tasks were fail")
+	RepoErrorFindingTasks    = errors.New("finding the tasks were fail")
+	RepoErrorNoTasksFound    = errors.New("no tasks found")
+	RepoErrorNoCollections   = errors.New("collections are over")
+	RepoErrorTaskExist       = errors.New("task with the uuid already exist")
+	RepoErrorDeadlock        = errors.New("deadlock, please retry")
+	RepoErrorLockWaitTimeout = errors.New("lock wait timeout exceeded")
+	RepoErrorSchemaSetup     = errors.New("schema setup failed")
 )
 
 /*	--------------------------------------------------
@@ -223,41 +224,15 @@ type MonitoringInterface interface {
 */
 
 var (
-	/*
-		Number of tasks waiting for confirmation after sending
-	*/
 	WaitingForConfirmation Topic = "waiting_for_confirmation"
-
-	/*
-		The rate of confirmation of the sending task
-	*/
-	ConfirmationRate Topic = "confirmation_rate"
-
-	/*
-		Number of preloaded tasks
-	*/
-	Preloaded Topic = "preloaded"
-
-	/*
-		Speed of preloading
-	*/
-	PreloadingRate Topic = "preloading_rate"
-
-	/*
-		Number of tasks waiting for sending
-	*/
-	WaitingForSending Topic = "waiting_for_sending"
-
-	CreatingRate Topic = "creating_rate"
-
-	DeletingRate Topic = "deleting_rate"
-
-	SendingRate Topic = "sending_rate"
-
-	/*
-		Number of all tasks
-	*/
-	All Topic = "all"
+	ConfirmationRate       Topic = "confirmation_rate"
+	Preloaded              Topic = "preloaded"
+	PreloadingRate         Topic = "preloading_rate"
+	WaitingForSending      Topic = "waiting_for_sending"
+	CreatingRate           Topic = "creating_rate"
+	DeletingRate           Topic = "deleting_rate"
+	SendingRate            Topic = "sending_rate"
+	All                    Topic = "all"
 )
 
 type TriggerHookInterface interface {
