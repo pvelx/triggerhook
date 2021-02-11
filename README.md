@@ -48,7 +48,7 @@ Waiting for confirmation | The number of tasks waiting for confirmation after se
 Confirmation rate | The number of confirmed tasks after sending per unit of time.
 
 
-### Features:
+### Features
 - Simple API.
 - Performing tasks with second precision.
 - High performance of sending tasks for execution. This is achieved through a simple task storage scheme, indexing, and multithreaded database access.
@@ -58,7 +58,7 @@ Confirmation rate | The number of confirmed tasks after sending per unit of time
 - The modular structure of the library. You can easily replace any part with your own implementation.
 - Monitoring the status of the application. Built-in performance monitoring adapter. Built-in adapter for error logging.
 
-### Benchmark:
+### Benchmark
 The main indicators of the task processing speed were measured.
 
 Application server:
