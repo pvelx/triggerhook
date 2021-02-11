@@ -97,9 +97,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/pvelx/triggerHook"
-	"github.com/pvelx/triggerHook/connection"
-	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerhook"
+	"github.com/pvelx/triggerhook/connection"
+	"github.com/pvelx/triggerhook/domain"
 	"github.com/satori/go.uuid"
 )
 
@@ -110,7 +110,7 @@ func send(id string, execTime int64) error {
 }
 
 func main() {
-	tasksDeferredService := triggerHook.Build(triggerHook.Config{
+	tasksDeferredService := triggerhook.Build(triggerhook.Config{
 		Connection: connection.Options{
 			Host: "127.0.0.1:3306",
 		},
