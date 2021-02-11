@@ -35,8 +35,8 @@ An intermediate buffer is used before deletion, also to compensate for peak load
 
 The diagram shows some of the application metrics:
 
-Metric  | Description
-------------------|----------------------
+Metric|Description
+---|---
 All|Total number of tasks
 Creating rate | Number of created tasks (via the Create method) per unit of time.
 Deleting rate | Number of deleted tasks (via the Delete method) per unit of time. 
@@ -57,6 +57,29 @@ Confirmation rate | The number of confirmed tasks after sending per unit of time
 - It is designed for a micro-service, event-driven architecture. It is easy to implement a fully asynchronous API.
 - The modular structure of the library. You can easily replace any part with your own implementation.
 - Monitoring the status of the application. Built-in performance monitoring adapter. Built-in adapter for error logging.
+
+### Benchmark:
+The main indicators of the task processing speed were measured.
+
+Application server:
+- AWS EC2 Ubuntu 20
+- t2.micro
+- 1 vCPUs 2.5 GHz
+- 1 GiB RAM
+
+Database server:
+- AWS RDS MySQL 8.0
+- db.t3.micro
+- 2 vCPUs
+- 1 GiB RAM
+- Network: 2085 Mbps
+
+Test|The duration of the test|Average speed (tasks/sec)|Number of tasks
+---|---|---|---
+Creating tasks|1m 11s|1396|100000
+Deleting tasks|52s|1920|100000
+Sending tasks (task status from red to blue)|498ms|200668|100000
+Confirm tasks (the status of the task from the blue to the delete)|2s|49905|100000
 
 ### Requirements
 
