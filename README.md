@@ -47,6 +47,9 @@ Waiting for sending | The number of tasks that have reached the execution time a
 Waiting for confirmation | The number of tasks waiting for confirmation after sending. The last stage of working with the task. The lower the value, the better. The presence of tasks in this metric indicates slow work with the database.
 Confirmation rate | The number of confirmed tasks after sending per unit of time.
 
+### Demo
+[Use the demo](https://github.com/pvelx/k8s-message-demo)  
+[Read the article](https://vlad-pavlenko.medium.com/deferred-tasks-in-a-microservice-architecture-8e7273089ee7)
 
 ### Features
 - Simple API.
