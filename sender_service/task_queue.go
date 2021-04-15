@@ -9,7 +9,7 @@ import (
 var QueueIsEmpty = errors.New("queue is empty")
 
 type batchTaskQueue struct {
-	sync.RWMutex
+	sync.Mutex
 	queue [][]domain.Task
 }
 
@@ -30,8 +30,4 @@ func (t *batchTaskQueue) Pop() ([]domain.Task, error) {
 	}
 
 	return nil, QueueIsEmpty
-}
-
-func (t *batchTaskQueue) Len() int {
-	return len(t.queue)
 }
