@@ -109,6 +109,7 @@ func (s *preloadingService) Run() {
 		result, err := s.taskManager.GetTasksToComplete(ctx, s.timePreload)
 		switch {
 		case err == contracts.TmErrorCollectionsNotFound:
+			stop()
 			s.eh.New(contracts.LevelDebug, "I go to sleep because I don't get any tasks", nil)
 			time.Sleep(s.timePreload)
 
