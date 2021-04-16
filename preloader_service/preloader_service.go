@@ -45,11 +45,6 @@ func New(
 
 	preloadedTask := make(chan domain.Task, 1)
 
-	if err := monitoring.Listen(contracts.WaitingForSending, func() int64 {
-		return int64(len(preloadedTask))
-	}); err != nil {
-		panic(err)
-	}
 	if err := monitoring.Init(contracts.CreatingRate, contracts.VelocityMetricType); err != nil {
 		panic(err)
 	}

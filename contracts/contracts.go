@@ -244,6 +244,7 @@ var (
 	PreloadingRate Topic = "preloading_rate"
 
 	/*
+		Deprecated
 		Number of tasks waiting for sending
 	*/
 	WaitingForSending Topic = "waiting_for_sending"

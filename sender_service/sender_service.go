@@ -61,7 +61,8 @@ func New(
 				rollback:   buffer.In,
 				confirm:    tasksToConfirm,
 			}
-		}}
+		},
+	}
 
 	return &senderService{
 		taskManager:              taskManager,
@@ -123,9 +124,8 @@ func (s *senderService) generateBatch(tasks <-chan domain.Task) chan []domain.Ta
 
 	go func() {
 		defer close(updateQueue)
-		batch := make([]domain.Task, 0, s.batchMaxItems)
 		for {
-			batch = batch[:0]
+			batch := make([]domain.Task, 0, s.batchMaxItems)
 			expire := time.NewTimer(s.batchTimeout)
 			for {
 				select {
