@@ -11,8 +11,8 @@ import (
 )
 
 type Options struct {
-	TasksReadyToSendCap   int
-	CanceledTasksCap      int
+	TasksReadyToSendCap   int //Deprecated
+	CanceledTasksCap      int //Deprecated
 	GreedyProcessingLimit int
 }
 
@@ -29,8 +29,6 @@ func New(
 	}
 
 	if err := mergo.Merge(options, Options{
-		TasksReadyToSendCap:   1000000,
-		CanceledTasksCap:      1000000,
 		GreedyProcessingLimit: 10,
 	}); err != nil {
 		panic(err)
@@ -50,8 +48,8 @@ func New(
 	service := &waitingService{
 		tasksWaitingList:      tasksWaitingList,
 		preloadedTasks:        preloadedTasks,
-		canceledTasks:         make(chan string, options.CanceledTasksCap),
-		tasksReadyToSend:      make(chan domain.Task, options.TasksReadyToSendCap),
+		canceledTasks:         make(chan string, 1),
+		tasksReadyToSend:      make(chan domain.Task, 1),
 		greedyProcessingLimit: options.GreedyProcessingLimit,
 		monitoring:            monitoring,
 		taskManager:           taskManager,

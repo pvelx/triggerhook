@@ -18,7 +18,7 @@ type Options struct {
 	CoefTimePreloadOfNewTask int
 	TaskNumberInOneSearch    int
 	WorkersCount             int
-	PreloadedTaskCap         int
+	PreloadedTaskCap         int //Deprecated
 }
 
 func New(
@@ -37,20 +37,14 @@ func New(
 		CoefTimePreloadOfNewTask: 2,
 		TaskNumberInOneSearch:    1000,
 		WorkersCount:             10,
-		PreloadedTaskCap:         1000000,
 	}
 
 	if err := mergo.Merge(options, defaultOptions); err != nil {
 		panic(err)
 	}
 
-	preloadedTask := make(chan domain.Task, options.PreloadedTaskCap)
+	preloadedTask := make(chan domain.Task, 1)
 
-	if err := monitoring.Listen(contracts.WaitingForSending, func() int64 {
-		return int64(len(preloadedTask))
-	}); err != nil {
-		panic(err)
-	}
 	if err := monitoring.Init(contracts.CreatingRate, contracts.VelocityMetricType); err != nil {
 		panic(err)
 	}
