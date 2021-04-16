@@ -8,32 +8,6 @@ import (
 )
 
 /*	--------------------------------------------------
-	Prioritized task list
-*/
-
-type PrioritizedTaskListInterface interface {
-	/*
-		Count of tasks in the list
-	*/
-	Len() int
-
-	/*
-		Add a task to the list based on priority
-	*/
-	Add(task domain.Task)
-
-	/*
-		Take the most prioritized task and delete from list
-	*/
-	Take() *domain.Task
-
-	/*
-		Searches for a task and deletes it return true when the task was deleted, false - when was not found
-	*/
-	DeleteIfExist(taskId string) bool
-}
-
-/*	--------------------------------------------------
 	Sender service
 */
 

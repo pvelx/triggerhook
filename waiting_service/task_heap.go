@@ -1,14 +1,13 @@
-package prioritized_task_list
+package waiting_service
 
 import (
 	"container/heap"
 	"sync"
 
-	"github.com/pvelx/triggerhook/contracts"
 	"github.com/pvelx/triggerhook/domain"
 )
 
-func New(tasks []domain.Task) contracts.PrioritizedTaskListInterface {
+func NewPrioritizedTask(tasks []domain.Task) prioritizedTaskListInterface {
 	pq := items{}
 	var index = make(map[string]*int)
 	i := 0
@@ -28,7 +27,7 @@ func New(tasks []domain.Task) contracts.PrioritizedTaskListInterface {
 }
 
 type heapPrioritizedTaskList struct {
-	contracts.PrioritizedTaskListInterface
+	prioritizedTaskListInterface
 	pq    items
 	index map[string]*int
 	sync.Mutex

@@ -1,4 +1,4 @@
-package prioritized_task_list
+package waiting_service
 
 type items []*item
 

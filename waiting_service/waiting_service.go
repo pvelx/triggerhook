@@ -7,8 +7,33 @@ import (
 	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerhook/contracts"
 	"github.com/pvelx/triggerhook/domain"
-	"github.com/pvelx/triggerhook/prioritized_task_list"
 )
+
+/*	--------------------------------------------------
+	Prioritized task list
+*/
+
+type prioritizedTaskListInterface interface {
+	/*
+		Count of tasks in the list
+	*/
+	Len() int
+
+	/*
+		Add a task to the list based on priority
+	*/
+	Add(task domain.Task)
+
+	/*
+		Take the most prioritized task and delete from list
+	*/
+	Take() *domain.Task
+
+	/*
+		Searches for a task and deletes it return true when the task was deleted, false - when was not found
+	*/
+	DeleteIfExist(taskId string) bool
+}
 
 type Options struct {
 	TasksReadyToSendCap   int //Deprecated
@@ -34,7 +59,7 @@ func New(
 		panic(err)
 	}
 
-	tasksWaitingList := prioritized_task_list.New([]domain.Task{})
+	tasksWaitingList := NewPrioritizedTask([]domain.Task{})
 
 	if err := monitoring.Listen(contracts.Preloaded, func() int64 {
 		return int64(tasksWaitingList.Len())
@@ -60,7 +85,7 @@ func New(
 }
 
 type waitingService struct {
-	tasksWaitingList      contracts.PrioritizedTaskListInterface
+	tasksWaitingList      prioritizedTaskListInterface
 	preloadedTasks        <-chan domain.Task
 	canceledTasks         chan string
 	tasksReadyToSend      chan domain.Task
