@@ -1,6 +1,7 @@
 package sender_service
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -51,7 +52,7 @@ func TestConfirmation(t *testing.T) {
 
 	done := make(chan struct{})
 	mu := &sync.Mutex{}
-	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(tasks []domain.Task) error {
+	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(ctx context.Context, tasks []domain.Task) error {
 		var exp int
 		mu.Lock()
 		exp, expectedTasksSequence = expectedTasksSequence[0], expectedTasksSequence[1:]
@@ -113,7 +114,7 @@ func TestConsuming(t *testing.T) {
 	success <- false
 	success <- true
 
-	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(tasks []domain.Task) error {
+	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(ctx context.Context, tasks []domain.Task) error {
 		assert.Len(t, tasks, countTasks, "count task is not correct")
 		return nil
 	}}

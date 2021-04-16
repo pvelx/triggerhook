@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"time"
 
 	"github.com/pvelx/triggerhook/contracts"
@@ -13,19 +14,19 @@ type RepositoryMock struct {
 	/*
 		You need to substitute *Mock methods to do substitute original functions
 	*/
-	CreateMock              func(task domain.Task, isTaken bool) error
-	DeleteMock              func(tasks []domain.Task) (int64, error)
-	FindBySecToExecTimeMock func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error)
+	CreateMock              func(ctx context.Context, task domain.Task, isTaken bool) error
+	DeleteMock              func(ctx context.Context, tasks []domain.Task) (int64, error)
+	FindBySecToExecTimeMock func(ctx context.Context, preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error)
 	UpMock                  func() error
 	CountMock               func() (int, error)
 }
 
-func (r *RepositoryMock) Create(task domain.Task, isTaken bool) error {
-	return r.CreateMock(task, isTaken)
+func (r *RepositoryMock) Create(ctx context.Context, task domain.Task, isTaken bool) error {
+	return r.CreateMock(ctx, task, isTaken)
 }
 
-func (r *RepositoryMock) Delete(tasks []domain.Task) (int64, error) {
-	return r.DeleteMock(tasks)
+func (r *RepositoryMock) Delete(ctx context.Context, tasks []domain.Task) (int64, error) {
+	return r.DeleteMock(ctx, tasks)
 }
 
 func (r *RepositoryMock) Up() (error error) {
@@ -42,18 +43,18 @@ func (r *RepositoryMock) Count() (int, error) {
 	return r.CountMock()
 }
 
-func (r *RepositoryMock) FindBySecToExecTime(preloadingTimeRange time.Duration) (
+func (r *RepositoryMock) FindBySecToExecTime(ctx context.Context, preloadingTimeRange time.Duration) (
 	collection contracts.CollectionsInterface,
 	error error,
 ) {
-	return r.FindBySecToExecTimeMock(preloadingTimeRange)
+	return r.FindBySecToExecTimeMock(ctx, preloadingTimeRange)
 }
 
 type CollectionsMock struct {
 	contracts.CollectionsInterface
-	NextMock func() (tasks []domain.Task, err error)
+	NextMock func(ctx context.Context) (tasks []domain.Task, err error)
 }
 
-func (c *CollectionsMock) Next() (tasks []domain.Task, err error) {
-	return c.NextMock()
+func (c *CollectionsMock) Next(ctx context.Context) (tasks []domain.Task, err error) {
+	return c.NextMock(ctx)
 }

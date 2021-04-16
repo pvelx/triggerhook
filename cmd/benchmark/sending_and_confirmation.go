@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -44,7 +45,7 @@ func upInitialState(taskCount int) {
 					Id:       util.NewId(),
 					ExecTime: time.Unix(now, 0).Add(-time.Duration(rand.Intn(dispersion)) * time.Second).Unix(),
 				}
-				if err := repositoryService.Create(task, false); err != nil {
+				if err := repositoryService.Create(context.Background(), task, false); err != nil {
 					log.Println(err)
 				}
 			}

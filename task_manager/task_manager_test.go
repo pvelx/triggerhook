@@ -1,6 +1,7 @@
 package task_manager
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ func TestTaskManager_Delete(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			countCallMethodOfRepository := 0
-			r := &repository.RepositoryMock{DeleteMock: func(tasks []domain.Task) (affected int64, err error) {
+			r := &repository.RepositoryMock{DeleteMock: func(ctx context.Context, tasks []domain.Task) (affected int64, err error) {
 				err = test.inputErrorRepository[countCallMethodOfRepository]
 				countCallMethodOfRepository++
 
@@ -77,7 +78,7 @@ func TestTaskManager_Delete(t *testing.T) {
 
 			tm := New(r, eh, &monitoring_service.MonitoringMock{}, nil)
 
-			result := tm.Delete(util.NewId())
+			result := tm.Delete(context.Background(), util.NewId())
 
 			assert.Equal(t, test.expectedError, result, "error from task manager is not correct")
 
@@ -124,7 +125,7 @@ func TestTaskManager_Create(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			countCallMethodOfRepository := 0
-			r := &repository.RepositoryMock{CreateMock: func(task domain.Task, isTaken bool) (err error) {
+			r := &repository.RepositoryMock{CreateMock: func(ctx context.Context, task domain.Task, isTaken bool) (err error) {
 				err = test.inputErrorRepository[countCallMethodOfRepository]
 				countCallMethodOfRepository++
 
@@ -140,7 +141,7 @@ func TestTaskManager_Create(t *testing.T) {
 
 			tm := New(r, eh, &monitoring_service.MonitoringMock{}, nil)
 
-			result := tm.Create(&domain.Task{}, true)
+			result := tm.Create(context.Background(), &domain.Task{}, true)
 
 			assert.Equal(t, test.expectedError, result, "error from task manager is not correct")
 
@@ -187,7 +188,7 @@ func TestTaskManager_ConfirmExecution(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			countCallMethodOfRepository := 0
-			r := &repository.RepositoryMock{DeleteMock: func(tasks []domain.Task) (affected int64, err error) {
+			r := &repository.RepositoryMock{DeleteMock: func(ctx context.Context, tasks []domain.Task) (affected int64, err error) {
 				err = test.inputErrorRepository[countCallMethodOfRepository]
 				countCallMethodOfRepository++
 
@@ -203,7 +204,7 @@ func TestTaskManager_ConfirmExecution(t *testing.T) {
 
 			tm := New(r, eh, &monitoring_service.MonitoringMock{}, nil)
 
-			result := tm.ConfirmExecution([]domain.Task{{}, {}, {}})
+			result := tm.ConfirmExecution(context.Background(), []domain.Task{{}, {}, {}})
 
 			assert.Equal(t, test.expectedError, result, "error from task manager is not correct")
 
@@ -269,7 +270,7 @@ func TestTaskManagerMock_GetTasksToComplete(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 
 			countCallMethodOfRepository := 0
-			r := &repository.RepositoryMock{FindBySecToExecTimeMock: func(preloadingTimeRange time.Duration) (
+			r := &repository.RepositoryMock{FindBySecToExecTimeMock: func(ctx context.Context, preloadingTimeRange time.Duration) (
 				collection contracts.CollectionsInterface,
 				err error,
 			) {
@@ -289,7 +290,7 @@ func TestTaskManagerMock_GetTasksToComplete(t *testing.T) {
 
 			tm := New(r, eh, &monitoring_service.MonitoringMock{}, nil)
 
-			result, err := tm.GetTasksToComplete(time.Second)
+			result, err := tm.GetTasksToComplete(context.Background(), time.Second)
 
 			assert.Equal(t, test.expectedResult, result, "result from task manager is not correct")
 			assert.Equal(t, test.expectedError, err, "error from task manager is not correct")

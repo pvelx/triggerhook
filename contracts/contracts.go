@@ -1,6 +1,7 @@
 package contracts
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -26,10 +27,10 @@ type TaskToSendInterface interface {
 	Task manager
 */
 type TaskManagerInterface interface {
-	Create(task *domain.Task, isTaken bool) error
-	Delete(taskId string) error
-	GetTasksToComplete(preloadingTimeRange time.Duration) (CollectionsInterface, error)
-	ConfirmExecution(task []domain.Task) error
+	Create(ctx context.Context, task *domain.Task, isTaken bool) error
+	Delete(ctx context.Context, taskId string) error
+	GetTasksToComplete(ctx context.Context, preloadingTimeRange time.Duration) (CollectionsInterface, error)
+	ConfirmExecution(ctx context.Context, task []domain.Task) error
 }
 
 var (
@@ -47,15 +48,15 @@ var (
 	Repository
 */
 type RepositoryInterface interface {
-	Create(task domain.Task, isTaken bool) error
-	Delete(tasks []domain.Task) (int64, error)
-	FindBySecToExecTime(preloadingTimeRange time.Duration) (CollectionsInterface, error)
+	Create(ctx context.Context, task domain.Task, isTaken bool) error
+	Delete(ctx context.Context, tasks []domain.Task) (int64, error)
+	FindBySecToExecTime(ctx context.Context, preloadingTimeRange time.Duration) (CollectionsInterface, error)
 	Up() error
 	Count() (int, error)
 }
 
 type CollectionsInterface interface {
-	Next() (tasks []domain.Task, err error)
+	Next(ctx context.Context) (tasks []domain.Task, err error)
 }
 
 var (
@@ -75,7 +76,7 @@ var (
 	Preloading task service
 */
 type PreloadingServiceInterface interface {
-	AddNewTask(task *domain.Task) error
+	AddNewTask(ctx context.Context, task *domain.Task) error
 	GetPreloadedChan() <-chan domain.Task
 	Run()
 }
@@ -84,7 +85,7 @@ type PreloadingServiceInterface interface {
 	Waiting task service
 */
 type WaitingServiceInterface interface {
-	CancelIfExist(taskId string) error
+	CancelIfExist(ctx context.Context, taskId string) error
 	GetReadyToSendChan() chan domain.Task
 	Run()
 }
@@ -236,9 +237,16 @@ var (
 )
 
 type TriggerHookInterface interface {
+
+	// Deprecated
 	Create(task *domain.Task) error
 
+	// Deprecated
 	Delete(taskId string) error
+
+	CreateCtx(ctx context.Context, task *domain.Task) error
+
+	DeleteCtx(ctx context.Context, taskId string) error
 
 	Consume() TaskToSendInterface
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -66,7 +67,7 @@ func deleteTasks(tasks <-chan *domain.Task, triggerHookService contracts.Trigger
 			defer wg.Done()
 			for task := range tasks {
 				preparingBar.Add(1)
-				if err := triggerHookService.Delete(task.Id); err != nil {
+				if err := triggerHookService.DeleteCtx(context.Background(), task.Id); err != nil {
 					log.Fatal(err)
 				}
 			}
@@ -100,7 +101,7 @@ func createTasks(
 				task := &domain.Task{
 					ExecTime: time.Now().Add(time.Hour + time.Duration(rand.Intn(dispersion))*time.Second).Unix(),
 				}
-				if err := triggerHookService.Create(task); err != nil {
+				if err := triggerHookService.CreateCtx(context.Background(), task); err != nil {
 					fmt.Println(err)
 				}
 

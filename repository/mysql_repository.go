@@ -77,7 +77,7 @@ func (r *mysqlRepository) Count() (int, error) {
 	return count, nil
 }
 
-func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
+func (r *mysqlRepository) Create(ctx context.Context, task domain.Task, isTaken bool) error {
 	createTaskQuery := "CALL create_task(?, ?, ?, ?, ?)"
 	args := []interface{}{
 		r.appInstanceId,
@@ -87,7 +87,7 @@ func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 		r.options.MaxCountTasksInCollection,
 	}
 
-	if _, err := r.client.Exec(createTaskQuery, args...); err != nil {
+	if _, err := r.client.ExecContext(ctx, createTaskQuery, args...); err != nil {
 		errCreating := contracts.RepoErrorCreatingTask
 
 		if err, ok := err.(*mysql.MySQLError); ok {
@@ -107,7 +107,7 @@ func (r *mysqlRepository) Create(task domain.Task, isTaken bool) error {
 	return nil
 }
 
-func (r *mysqlRepository) Delete(tasks []domain.Task) (int64, error) {
+func (r *mysqlRepository) Delete(ctx context.Context, tasks []domain.Task) (int64, error) {
 	if len(tasks) == 0 {
 		return 0, nil
 	}
@@ -120,7 +120,7 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (int64, error) {
 	deletingTaskQuery := fmt.Sprintf("DELETE FROM task WHERE uuid IN (?%s)",
 		strings.Repeat(",?", len(tasks)-1))
 
-	result, errDeleting := r.client.Exec(deletingTaskQuery, args...)
+	result, errDeleting := r.client.ExecContext(ctx, deletingTaskQuery, args...)
 	if errDeleting != nil {
 		errorReturn := contracts.RepoErrorDeletingTask
 
@@ -146,7 +146,7 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (int64, error) {
 	if r.options.CleaningFrequency > 0 &&
 		atomic.LoadInt32(&r.cleanRequestCount)%int32(r.options.CleaningFrequency) == 0 {
 
-		if err := r.deleteEmptyCollections(); err != nil {
+		if err := r.deleteEmptyCollections(ctx); err != nil {
 			r.eh.New(contracts.LevelError, err.Error(), nil)
 		}
 		atomic.StoreInt32(&r.cleanRequestCount, 0)
@@ -155,14 +155,14 @@ func (r *mysqlRepository) Delete(tasks []domain.Task) (int64, error) {
 	return affected, nil
 }
 
-func (r *mysqlRepository) deleteEmptyCollections() error {
+func (r *mysqlRepository) deleteEmptyCollections(ctx context.Context) error {
 	findCollectionsQuery := `SELECT c.id
 		FROM collection c WHERE c.exec_time < unix_timestamp()-5
 		AND NOT EXISTS(
 			SELECT t.uuid FROM task t WHERE t.collection_id = c.id
 		)`
 
-	rows, errFinding := r.client.Query(findCollectionsQuery)
+	rows, errFinding := r.client.QueryContext(ctx, findCollectionsQuery)
 	if errFinding != nil {
 		return errors.Wrap(errFinding, "deleting empty collections is fail")
 	}
@@ -189,7 +189,7 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 		deleteCollectionsQuery := fmt.Sprintf("DELETE FROM collection WHERE id IN(?%s)",
 			strings.Repeat(",?", len(ids)-1))
 
-		if _, err := r.client.Exec(deleteCollectionsQuery, ids...); err != nil {
+		if _, err := r.client.ExecContext(ctx, deleteCollectionsQuery, ids...); err != nil {
 			return errors.Wrap(err, "clearing collections was fail")
 		}
 	}
@@ -197,13 +197,13 @@ func (r *mysqlRepository) deleteEmptyCollections() error {
 	return nil
 }
 
-func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks []domain.Task, error error) {
+func (r *mysqlRepository) getTasksByCollection(ctx context.Context, collectionId int64) (tasks []domain.Task, error error) {
 	queryFindBySecToExecTime := `SELECT t.uuid, c.exec_time
 		FROM task t
 		INNER JOIN collection c on t.collection_id = c.id
 		WHERE t.collection_id = ?`
 
-	rows, errFinding := r.client.Query(queryFindBySecToExecTime, collectionId)
+	rows, errFinding := r.client.QueryContext(ctx, queryFindBySecToExecTime, collectionId)
 	if errFinding != nil {
 		error = contracts.RepoErrorGettingTasks
 		r.eh.New(contracts.LevelError, errFinding.Error(), map[string]interface{}{"collection id": collectionId})
@@ -237,9 +237,10 @@ func (r *mysqlRepository) getTasksByCollection(collectionId int64) (tasks []doma
 	return
 }
 
-func (r *mysqlRepository) FindBySecToExecTime(preloadingTimeRange time.Duration) (collection contracts.CollectionsInterface, error error) {
+func (r *mysqlRepository) FindBySecToExecTime(ctx context.Context, preloadingTimeRange time.Duration) (
+	collection contracts.CollectionsInterface, error error) {
+
 	toNextExecTime := time.Now().Add(preloadingTimeRange).Unix()
-	ctx := context.Background()
 
 	tx, errTx := r.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
@@ -490,14 +491,14 @@ func (c *Collections) takeCollectionId() (id int64, isEnd bool) {
 	return id, false
 }
 
-func (c *Collections) Next() ([]domain.Task, error) {
+func (c *Collections) Next(ctx context.Context) ([]domain.Task, error) {
 
 	id, isEnd := c.takeCollectionId()
 	if isEnd {
 		return nil, contracts.RepoErrorNoCollections
 	}
 
-	tasks, err := c.r.getTasksByCollection(id)
+	tasks, err := c.r.getTasksByCollection(ctx, id)
 	if err != nil {
 		return nil, err
 	}

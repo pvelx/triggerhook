@@ -1,6 +1,7 @@
 package sender_service
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ type Options struct {
 	TasksToConfirmCap        int //Deprecated
 	BatchesCap               int //Deprecated
 	ConfirmationWorkersCount int
+	CtxTimeout               time.Duration
 }
 
 var taskToSendPool *sync.Pool
@@ -35,6 +37,7 @@ func New(
 		BatchMaxItems:            1000,
 		BatchTimeout:             50 * time.Millisecond,
 		ConfirmationWorkersCount: 5,
+		CtxTimeout:               5 * time.Second,
 	}); err != nil {
 		panic(err)
 	}
@@ -74,6 +77,7 @@ func New(
 		batchTimeout:             options.BatchTimeout,
 		batchMaxItems:            options.BatchMaxItems,
 		taskBuffer:               buffer,
+		ctxTimeout:               options.CtxTimeout,
 	}
 }
 
@@ -88,6 +92,7 @@ type senderService struct {
 	confirmationWorkersCount int
 	batchMaxItems            int
 	taskBuffer               *buffer
+	ctxTimeout               time.Duration
 }
 
 func (s *senderService) Run() {
@@ -100,9 +105,11 @@ func (s *senderService) Run() {
 
 func (s *senderService) confirmation(batchTasks chan []domain.Task) {
 	for batch := range batchTasks {
-		if err := s.taskManager.ConfirmExecution(batch); err != nil {
+		ctx, stop := context.WithTimeout(context.Background(), s.ctxTimeout)
+		if err := s.taskManager.ConfirmExecution(ctx, batch); err != nil {
 			s.eh.New(contracts.LevelFatal, err.Error(), nil)
 		}
+		stop()
 
 		s.eh.New(contracts.LevelDebug, "confirmed tasks", map[string]interface{}{
 			"count of task": len(batch),

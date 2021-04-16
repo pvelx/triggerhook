@@ -1,6 +1,7 @@
 package waiting_service
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -99,8 +100,8 @@ func (s *waitingService) GetReadyToSendChan() chan domain.Task {
 	return s.tasksReadyToSend
 }
 
-func (s *waitingService) CancelIfExist(taskId string) error {
-	if err := s.taskManager.Delete(taskId); err != nil {
+func (s *waitingService) CancelIfExist(ctx context.Context, taskId string) error {
+	if err := s.taskManager.Delete(ctx, taskId); err != nil {
 		return err
 	}
 	s.canceledTasks <- taskId

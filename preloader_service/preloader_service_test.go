@@ -1,6 +1,7 @@
 package preloader_service
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -18,7 +19,7 @@ import (
 
 func TestTaskAdding(t *testing.T) {
 	var isTakenActual bool
-	taskManagerMock := &task_manager.TaskManagerMock{CreateMock: func(task *domain.Task, isTaken bool) error {
+	taskManagerMock := &task_manager.TaskManagerMock{CreateMock: func(ctx context.Context, task *domain.Task, isTaken bool) error {
 		isTakenActual = isTaken
 		return nil
 	}}
@@ -41,7 +42,7 @@ func TestTaskAdding(t *testing.T) {
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
 			preloadedTask := preloadingService.GetPreloadedChan()
-			if err := preloadingService.AddNewTask(&tt.task); err != nil {
+			if err := preloadingService.AddNewTask(context.Background(), &tt.task); err != nil {
 				t.Fatal(err)
 			}
 			assert.Equal(t, tt.isTakenExpected, isTakenActual, "The task must be taken")
@@ -103,7 +104,7 @@ func TestMainFlow(t *testing.T) {
 	var globalCurrentFinding int32 = 0
 
 	taskManagerMock := &task_manager.TaskManagerMock{
-		GetTasksToCompleteMock: func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
+		GetTasksToCompleteMock: func(ctx context.Context, preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
 
 			currentFinding := atomic.LoadInt32(&globalCurrentFinding)
 			if len(data) > int(currentFinding) {
@@ -111,7 +112,7 @@ func TestMainFlow(t *testing.T) {
 				collections := data[currentFinding].collections
 
 				var globalCurrentCollection int32 = 0
-				return &repository.CollectionsMock{NextMock: func() (tasks []domain.Task, err error) {
+				return &repository.CollectionsMock{NextMock: func(ctx context.Context) (tasks []domain.Task, err error) {
 
 					currentCollection := atomic.LoadInt32(&globalCurrentCollection)
 					if len(collections) > int(currentCollection) {

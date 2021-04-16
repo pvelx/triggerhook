@@ -1,6 +1,7 @@
 package waiting_service
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 	"time"
@@ -75,8 +76,9 @@ func TestDeleteTask(t *testing.T) {
 	//need some time for process tasks
 	time.Sleep(100 * time.Millisecond)
 
+	ctx := context.Background()
 	for _, task := range taskToDelete {
-		if waitingService.CancelIfExist(task.Id) != nil {
+		if waitingService.CancelIfExist(ctx, task.Id) != nil {
 			assert.Fail(t, "error is not expected")
 		}
 	}
@@ -121,7 +123,7 @@ func instanceOfWaitingService(preloadedTask chan domain.Task) contracts.WaitingS
 	return New(
 		preloadedTask,
 		&monitoring_service.MonitoringMock{},
-		&task_manager.TaskManagerMock{DeleteMock: func(taskId string) error {
+		&task_manager.TaskManagerMock{DeleteMock: func(ctx context.Context, taskId string) error {
 			return nil
 		}},
 		nil,
