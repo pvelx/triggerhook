@@ -21,7 +21,7 @@ var taskToSendPool *sync.Pool
 
 func New(
 	taskManager contracts.TaskManagerInterface,
-	tasksReadyToSend chan domain.Task,
+	tasksReadyToSend <-chan domain.Task,
 	eh contracts.EventHandlerInterface,
 	monitoring contracts.MonitoringInterface,
 	options *Options,
@@ -51,13 +51,14 @@ func New(
 	}
 
 	tasksToConfirm := make(chan domain.Task, options.BatchMaxItems)
+	buffer := NewBuffer()
 
 	taskToSendPool = &sync.Pool{
 		New: func() interface{} {
 			return &taskToSend{
 				monitoring: monitoring,
 				eh:         eh,
-				rollback:   tasksReadyToSend,
+				rollback:   buffer.In,
 				confirm:    tasksToConfirm,
 			}
 		}}
@@ -71,12 +72,13 @@ func New(
 		confirmationWorkersCount: options.ConfirmationWorkersCount,
 		batchTimeout:             options.BatchTimeout,
 		batchMaxItems:            options.BatchMaxItems,
+		taskBuffer:               buffer,
 	}
 }
 
 type senderService struct {
 	contracts.SenderServiceInterface
-	tasksReadyToSend         chan domain.Task
+	tasksReadyToSend         <-chan domain.Task
 	tasksToConfirm           chan domain.Task
 	taskManager              contracts.TaskManagerInterface
 	eh                       contracts.EventHandlerInterface
@@ -84,6 +86,7 @@ type senderService struct {
 	batchTimeout             time.Duration
 	confirmationWorkersCount int
 	batchMaxItems            int
+	taskBuffer               *buffer
 }
 
 func (s *senderService) Run() {
@@ -187,7 +190,12 @@ type taskToSend struct {
 func (s *senderService) Consume() contracts.TaskToSendInterface {
 	taskToSend := taskToSendPool.Get().(*taskToSend)
 	taskToSend.isProcessed = false
-	taskToSend.task = <-s.tasksReadyToSend
+
+	select {
+	case taskToSend.task = <-s.tasksReadyToSend:
+	case taskToSend.task = <-s.taskBuffer.Out:
+	}
+
 	return taskToSend
 }
 

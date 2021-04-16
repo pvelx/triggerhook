@@ -1,6 +1,7 @@
 package sender_service
 
 import (
+	"container/list"
 	"errors"
 	"github.com/pvelx/triggerhook/domain"
 	"sync"
@@ -30,4 +31,49 @@ func (t *batchTaskQueue) Pop() ([]domain.Task, error) {
 	}
 
 	return nil, QueueIsEmpty
+}
+
+type buffer struct {
+	In   chan domain.Task
+	Out  chan domain.Task
+	list *list.List
+}
+
+func NewBuffer() *buffer {
+	b := &buffer{
+		In:   make(chan domain.Task, 1),
+		Out:  make(chan domain.Task, 1),
+		list: list.New(),
+	}
+	go b.run()
+
+	return b
+}
+
+func (b *buffer) run() {
+	for {
+		if front := b.list.Front(); front == nil {
+			if b.In == nil {
+				close(b.Out)
+				return
+			}
+			value, ok := <-b.In
+			if !ok {
+				close(b.Out)
+				return
+			}
+			b.list.PushBack(value)
+		} else {
+			select {
+			case b.Out <- front.Value.(domain.Task):
+				b.list.Remove(front)
+			case value, ok := <-b.In:
+				if ok {
+					b.list.PushBack(value)
+				} else {
+					b.In = nil
+				}
+			}
+		}
+	}
 }
