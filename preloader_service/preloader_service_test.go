@@ -153,6 +153,13 @@ func TestMainFlow(t *testing.T) {
 	preloadedTask := preloadingService.GetPreloadedChan()
 	go preloadingService.Run()
 
+	var tasks []domain.Task
+	go func() {
+		for task := range preloadedTask {
+			tasks = append(tasks, task)
+		}
+	}()
+
 	receivedTasks := make(map[string]domain.Task)
 
 	time.Sleep(6 * time.Second)
@@ -160,12 +167,13 @@ func TestMainFlow(t *testing.T) {
 	for _, item := range data {
 		for _, collection := range item.collections {
 
-			if len(preloadedTask) == 0 {
+			if len(tasks) == 0 {
 				t.Fatal("tasks was received not enough")
 			}
 
 			for i := 0; i < collection.TaskCount; i++ {
-				taskActual := <-preloadedTask
+				taskActual := tasks[0]
+				tasks = tasks[1:]
 				if _, exist := receivedTasks[taskActual.Id]; exist {
 					t.Fatal(fmt.Sprintf("task '%s' already received", taskActual.Id))
 				}

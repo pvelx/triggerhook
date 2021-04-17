@@ -50,7 +50,10 @@ func TestMainFlow(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var actualMeasurementCh = make(chan contracts.MeasurementEvent)
+			workers := 2
+			actualMeasurementCh := make(chan contracts.MeasurementEvent)
+			fatalErrors := make(chan error, len(test.inputMeasurement)*workers)
+
 			var topicName contracts.Topic = "topic"
 
 			monitoringService := New(&Options{
@@ -66,17 +69,17 @@ func TestMainFlow(t *testing.T) {
 				},
 			})
 
-			monitoringService.Init(topicName, test.metricType)
+			_ = monitoringService.Init(topicName, test.metricType)
 			go monitoringService.Run()
 			time.Sleep(10 * time.Millisecond)
 
 			wait := make(chan bool)
-			for worker := 0; worker < 2; worker++ {
+			for worker := 0; worker < workers; worker++ {
 				go func() {
 					<-wait
 					for _, measure := range test.inputMeasurement {
 						if err := monitoringService.Publish(topicName, measure); err != nil {
-							t.Fatal(err)
+							fatalErrors <- err
 						}
 						time.Sleep(test.periodInputPub)
 					}
@@ -90,6 +93,12 @@ func TestMainFlow(t *testing.T) {
 					(<-actualMeasurementCh).Measurement,
 					"Measurement is not expected",
 				)
+			}
+
+			select {
+			case err := <-fatalErrors:
+				t.Fatal(err)
+			default:
 			}
 
 			assert.Len(t, actualMeasurementCh, 0, "Unexpected count of measurement")

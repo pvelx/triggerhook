@@ -66,11 +66,7 @@ func TestExample(t *testing.T) {
 		go func() {
 			for i := 0; i < current.tasksCount; i++ {
 				execTime := time.Now().Add(time.Duration(current.relativeExecTime) * time.Second).Unix()
-				if err := triggerHook.CreateCtx(context.Background(), &domain.Task{
-					ExecTime: execTime,
-				}); err != nil {
-					t.Fatal(err)
-				}
+				_ = triggerHook.CreateCtx(context.Background(), &domain.Task{ExecTime: execTime})
 			}
 		}()
 	}

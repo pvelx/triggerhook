@@ -115,6 +115,7 @@ func (s *preloadingService) Run() {
 
 			continue
 		case err != nil:
+			stop()
 			/*
 				Stop the application
 			*/

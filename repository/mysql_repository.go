@@ -252,7 +252,7 @@ func (r *mysqlRepository) FindBySecToExecTime(ctx context.Context, preloadingTim
 		return
 	}
 
-	queryFindBySecToExecTime := `SELECT id 
+	queryFindBySecToExecTime := `SELECT id
 		FROM collection
 		WHERE exec_time <= ? AND taken_by_instance != ?
 		ORDER BY exec_time
@@ -421,7 +421,7 @@ func (r *mysqlRepository) Up() (error error) {
 			SET @var_exec_time = param_exec_time;
 			SET @var_app_instance = param_app_instance;
 			SET @var_count_task_in_collection = count_task_in_collection;
-		
+
 			IF is_taken THEN
 				SET @app_instance = param_app_instance;
 				SET @compare_operator = '=';
@@ -429,21 +429,21 @@ func (r *mysqlRepository) Up() (error error) {
 				SET @app_instance = '';
 				SET @compare_operator = '!=';
 			end if;
-		
+
 			SET @find_collection_query = CONCAT('SELECT c.id INTO  @var_collection_id
 				FROM collection c LEFT JOIN task t on c.id = t.collection_id
 				WHERE c.exec_time = ? AND c.taken_by_instance ', @compare_operator, ' ?
 				GROUP BY c.id HAVING count(t.uuid) < ? LIMIT 1');
-		
+
 			PREPARE stmt FROM @find_collection_query;
 			EXECUTE stmt USING @var_exec_time, @var_app_instance, @var_count_task_in_collection;
 			DEALLOCATE PREPARE stmt;
-		
+
 			IF (@var_collection_id = 0) THEN
 				INSERT INTO collection (exec_time, taken_by_instance) VALUE (param_exec_time, @app_instance);
 				SET @var_collection_id = LAST_INSERT_ID();
 			END IF;
-		
+
 			INSERT INTO task (uuid, collection_id) VALUE (param_uuid, @var_collection_id);
 		END;`
 

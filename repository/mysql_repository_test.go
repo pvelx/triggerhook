@@ -109,11 +109,9 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	workersDone.Wait()
 	close(foundTasks)
 
-	var tasks = make([]domain.Task, 0, expectedTaskCount*2)
 	for task := range foundTasks {
-		tasks = append(tasks, task)
 		if _, exist := allTasks[task.Id]; exist {
-			assert.Fail(t, fmt.Sprintf("The task already was founded in previous time"))
+			assert.Fail(t, "The task already was founded in previous time")
 		}
 		allTasks[task.Id] = task
 		foundedCountOfTasks++
@@ -158,7 +156,7 @@ func TestFindBySecToExecTime(t *testing.T) {
 
 		for _, task := range tasks {
 			if _, exist := allTasks[task.Id]; exist {
-				assert.Fail(t, fmt.Sprintf("Task was founded in previous time"))
+				assert.Fail(t, "Task was founded in previous time")
 			}
 			allTasks[task.Id] = task
 		}
@@ -168,7 +166,7 @@ func TestFindBySecToExecTime(t *testing.T) {
 
 		expectedCountTaskOnIteration, isFound = find(expectedCountTaskOnIteration, len(tasks))
 		if !isFound {
-			assert.Fail(t, fmt.Sprintf("Founded count of task in for collection is not correct"))
+			assert.Fail(t, "Founded count of task in for collection is not correct")
 		}
 	}
 
@@ -438,7 +436,7 @@ func getCountCollectionsByParamsInDb(isTaken bool, execTime int64) int {
 		op = "="
 	}
 	var count int
-	query := fmt.Sprintf(`SELECT count(id) 
+	query := fmt.Sprintf(`SELECT count(id)
 		FROM collection
 		WHERE exec_time = ? AND taken_by_instance %s ?`, op)
 	err := db.QueryRow(query, execTime, appInstanceId).Scan(&count)
