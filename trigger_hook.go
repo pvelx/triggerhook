@@ -32,8 +32,8 @@ type triggerHook struct {
 }
 
 // Deprecated
-func (s *triggerHook) Delete(taskId string) error {
-	return s.waitingService.CancelIfExist(context.Background(), taskId)
+func (s *triggerHook) Delete(taskID string) error {
+	return s.waitingService.CancelIfExist(context.Background(), taskID)
 }
 
 // Deprecated
@@ -41,8 +41,8 @@ func (s *triggerHook) Create(task *domain.Task) error {
 	return s.preloadingService.AddNewTask(context.Background(), task)
 }
 
-func (s *triggerHook) DeleteCtx(ctx context.Context, taskId string) error {
-	return s.waitingService.CancelIfExist(ctx, taskId)
+func (s *triggerHook) DeleteCtx(ctx context.Context, taskID string) error {
+	return s.waitingService.CancelIfExist(ctx, taskID)
 }
 
 func (s *triggerHook) CreateCtx(ctx context.Context, task *domain.Task) error {

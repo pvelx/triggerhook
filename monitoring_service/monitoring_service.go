@@ -117,7 +117,11 @@ func (m *Monitoring) Listen(topic contracts.Topic, callback func() int64) error 
 func (m *Monitoring) Run() {
 	for {
 		for topic, topicSubscriptions := range m.subscriptionChs {
-			measure := m.metrics[topic].Get()
+			metric := m.metrics[topic]
+			if metric == nil {
+				continue
+			}
+			measure := metric.Get()
 			now := time.Now()
 
 			for _, subscriptionCh := range topicSubscriptions {
