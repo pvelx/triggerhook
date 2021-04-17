@@ -1,7 +1,9 @@
 package preloader_service
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -18,7 +20,7 @@ import (
 
 func TestTaskAdding(t *testing.T) {
 	var isTakenActual bool
-	taskManagerMock := &task_manager.TaskManagerMock{CreateMock: func(task *domain.Task, isTaken bool) error {
+	taskManagerMock := &task_manager.TaskManagerMock{CreateMock: func(ctx context.Context, task *domain.Task, isTaken bool) error {
 		isTakenActual = isTaken
 		return nil
 	}}
@@ -41,7 +43,7 @@ func TestTaskAdding(t *testing.T) {
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
 			preloadedTask := preloadingService.GetPreloadedChan()
-			if err := preloadingService.AddNewTask(&tt.task); err != nil {
+			if err := preloadingService.AddNewTask(context.Background(), &tt.task); err != nil {
 				t.Fatal(err)
 			}
 			assert.Equal(t, tt.isTakenExpected, isTakenActual, "The task must be taken")
@@ -103,7 +105,7 @@ func TestMainFlow(t *testing.T) {
 	var globalCurrentFinding int32 = 0
 
 	taskManagerMock := &task_manager.TaskManagerMock{
-		GetTasksToCompleteMock: func(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
+		GetTasksToCompleteMock: func(ctx context.Context, preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
 
 			currentFinding := atomic.LoadInt32(&globalCurrentFinding)
 			if len(data) > int(currentFinding) {
@@ -111,7 +113,7 @@ func TestMainFlow(t *testing.T) {
 				collections := data[currentFinding].collections
 
 				var globalCurrentCollection int32 = 0
-				return &repository.CollectionsMock{NextMock: func() (tasks []domain.Task, err error) {
+				return &repository.CollectionsMock{NextMock: func(ctx context.Context) (tasks []domain.Task, err error) {
 
 					currentCollection := atomic.LoadInt32(&globalCurrentCollection)
 					if len(collections) > int(currentCollection) {
@@ -152,6 +154,16 @@ func TestMainFlow(t *testing.T) {
 	preloadedTask := preloadingService.GetPreloadedChan()
 	go preloadingService.Run()
 
+	var tasks []domain.Task
+	mu := &sync.RWMutex{}
+	go func() {
+		for task := range preloadedTask {
+			mu.Lock()
+			tasks = append(tasks, task)
+			mu.Unlock()
+		}
+	}()
+
 	receivedTasks := make(map[string]domain.Task)
 
 	time.Sleep(6 * time.Second)
@@ -159,12 +171,20 @@ func TestMainFlow(t *testing.T) {
 	for _, item := range data {
 		for _, collection := range item.collections {
 
-			if len(preloadedTask) == 0 {
+			mu.RLock()
+			l := len(tasks)
+			mu.RUnlock()
+			if l == 0 {
 				t.Fatal("tasks was received not enough")
 			}
 
 			for i := 0; i < collection.TaskCount; i++ {
-				taskActual := <-preloadedTask
+
+				mu.Lock()
+				taskActual := tasks[0]
+				tasks = tasks[1:]
+				mu.Unlock()
+
 				if _, exist := receivedTasks[taskActual.Id]; exist {
 					t.Fatal(fmt.Sprintf("task '%s' already received", taskActual.Id))
 				}

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -76,7 +77,7 @@ func benchmarkDelete(countTaskToDeleteAtOnce int, b *testing.B) {
 			taskBunches = taskBunches[1:]
 			mu.Unlock()
 			b.StartTimer()
-			if _, err := repository.Delete(taskBunch); err != nil {
+			if _, err := repository.Delete(context.Background(), taskBunch); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -93,10 +94,14 @@ func BenchmarkCreate(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			err := repository.Create(domain.Task{
-				Id:       util.NewId(),
-				ExecTime: time.Now().Unix(),
-			}, false)
+			err := repository.Create(
+				context.Background(),
+				domain.Task{
+					Id:       util.NewId(),
+					ExecTime: time.Now().Unix(),
+				},
+				false,
+			)
 			if err != nil {
 				fmt.Println(err)
 			}

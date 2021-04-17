@@ -1,6 +1,7 @@
 package triggerhook
 
 import (
+	"context"
 	"github.com/pvelx/triggerhook/contracts"
 	"github.com/pvelx/triggerhook/domain"
 )
@@ -30,12 +31,22 @@ type triggerHook struct {
 	monitoringService contracts.MonitoringInterface
 }
 
-func (s *triggerHook) Delete(taskId string) error {
-	return s.waitingService.CancelIfExist(taskId)
+// Deprecated
+func (s *triggerHook) Delete(taskID string) error {
+	return s.waitingService.CancelIfExist(context.Background(), taskID)
 }
 
+// Deprecated
 func (s *triggerHook) Create(task *domain.Task) error {
-	return s.preloadingService.AddNewTask(task)
+	return s.preloadingService.AddNewTask(context.Background(), task)
+}
+
+func (s *triggerHook) DeleteCtx(ctx context.Context, taskID string) error {
+	return s.waitingService.CancelIfExist(ctx, taskID)
+}
+
+func (s *triggerHook) CreateCtx(ctx context.Context, task *domain.Task) error {
+	return s.preloadingService.AddNewTask(ctx, task)
 }
 
 func (s *triggerHook) Consume() contracts.TaskToSendInterface {

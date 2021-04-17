@@ -25,7 +25,7 @@ func clear() {
 		Host:     mysqlHost,
 		DbName:   mysqlDbName,
 	})
-	repository.New(conn, "", nil, nil).Up()
+	_ = repository.New(conn, "", nil, nil).Up()
 
 	if _, err := conn.Exec("DELETE FROM task"); err != nil {
 		log.Fatal(err)

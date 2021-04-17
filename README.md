@@ -1,11 +1,11 @@
 ## Trigger Hook - delayed launch of tasks
 
 [![Build Status](https://travis-ci.com/pvelx/triggerhook.svg?branch=master)](https://travis-ci.com/pvelx/triggerhook)
-[![GitHub release](https://img.shields.io/github/release/pvelx/triggerhook.svg?include_prereleases)](https://github.com/pvelx/triggerhook/releases/latest) 
+[![GitHub release](https://img.shields.io/github/release/pvelx/triggerhook.svg?include_prereleases)](https://github.com/pvelx/triggerhook/releases/latest)
 
-Often in projects, there is a need to perform deferred tasks, 
-such as sending email, push, and other tasks specific to the domain area of your application. 
-Difficulties begin when the usual crontab is no longer enough, 
+Often in projects, there is a need to perform deferred tasks,
+such as sending email, push, and other tasks specific to the domain area of your application.
+Difficulties begin when the usual crontab is no longer enough,
 when batch processing is not suitable, when each task unit has its own execution time or it is assigned dynamically.
 To solve this problem, a Trigger Hook was created. You can build a task scheduler based on this library.
 
@@ -25,11 +25,11 @@ Task  | Description
 
 Life cycle tasks:
 - When creating a task, it gets into the database (square block) (red and yellow).
-- Tasks are loaded into memory (triangular block) if their start time is coming soon (red->yellow). 
+- Tasks are loaded into memory (triangular block) if their start time is coming soon (red->yellow).
 This structure is implemented in the form of a prioritized queue (heap).
-- When the task execution time comes, it is sent for execution (yellow->green). 
+- When the task execution time comes, it is sent for execution (yellow->green).
 An intermediate buffer is used before processing to compensate for peak loads.
-- If the task is successfully submitted, it is deleted from the database (green->blue). 
+- If the task is successfully submitted, it is deleted from the database (green->blue).
 An intermediate buffer is used before deletion, also to compensate for peak loads.
 
 
@@ -39,7 +39,7 @@ Metric|Description
 ---|---
 All|Total number of tasks
 Creating rate | Number of created tasks (via the Create method) per unit of time.
-Deleting rate | Number of deleted tasks (via the Delete method) per unit of time. 
+Deleting rate | Number of deleted tasks (via the Delete method) per unit of time.
 Sending rate | The number of processed tasks (via the Consume method) per unit of time.
 Preloaded | The number of tasks preloaded into memory.
 Preloading rate | The number of tasks loaded per unit of time.
@@ -48,14 +48,14 @@ Waiting for confirmation | The number of tasks waiting for confirmation after se
 Confirmation rate | The number of confirmed tasks after sending per unit of time.
 
 ### Demo
-[Use the demo](https://github.com/pvelx/k8s-message-demo)  
+[Use the demo](https://github.com/pvelx/k8s-message-demo)
 [Read the article](https://vlad-pavlenko.medium.com/deferred-tasks-in-a-microservice-architecture-8e7273089ee7)
 
 ### Features
 - Simple API.
 - Performing tasks with second precision.
 - High performance of sending tasks for execution. This is achieved through a simple task storage scheme, indexing, and multithreaded database access.
-- High peak performance. Tasks that will be completed soon are loaded into memory in advance. This is especially important, for example, if several hundred thousand tasks are assigned at one time. 
+- High peak performance. Tasks that will be completed soon are loaded into memory in advance. This is especially important, for example, if several hundred thousand tasks are assigned at one time.
 - The system is durable to failures. Only after the task is completed, the task is deleted from the database. This ensures that the task is sent for execution. The sudden stop of the application will not lead to inconsistent data in the database.
 - It is designed for a micro-service, event-driven architecture. It is easy to implement a fully asynchronous API.
 - The modular structure of the library. You can easily replace any part with your own implementation.
@@ -125,13 +125,13 @@ func main() {
 				Id:       uuid.NewV4().String(),
 				ExecTime: time.Now().Add(time.Minute).Unix(),
 			}
-			if err := tasksDeferredService.Create(&task); err != nil {
+			if err := tasksDeferredService.CreateCtx(context.Background(), &task); err != nil {
 				log.Fatalf("error creating task: %v", err)
 			}
 
 			// Delete each tenth task
 			if i%10 == 0 {
-				if err := tasksDeferredService.Delete(task.Id); err != nil {
+				if err := tasksDeferredService.DeleteCtx(context.Background(), task.Id); err != nil {
 					log.Fatalf("error deleting task: %v", err)
 				}
 			}

@@ -1,4 +1,4 @@
-package prioritized_task_list
+package waiting_service
 
 import (
 	"math/rand"
@@ -13,7 +13,7 @@ func BenchmarkAdd(b *testing.B) {
 	rand.Seed(time.Now().UnixNano())
 
 	b.ReportAllocs()
-	priorityList := New([]domain.Task{})
+	priorityList := NewPrioritizedTask([]domain.Task{})
 	for n := 0; n < b.N; n++ {
 		execTime := int64(rand.Intn(1000000))
 		priorityList.Add(domain.Task{Id: util.NewId(), ExecTime: execTime})
@@ -21,7 +21,7 @@ func BenchmarkAdd(b *testing.B) {
 }
 
 func BenchmarkTake(b *testing.B) {
-	priorityList := New([]domain.Task{})
+	priorityList := NewPrioritizedTask([]domain.Task{})
 	countOfTasks := int64(3e+6)
 	for i := int64(0); i < countOfTasks; i++ {
 		priorityList.Add(domain.Task{Id: util.NewId(), ExecTime: i})
@@ -34,7 +34,7 @@ func BenchmarkTake(b *testing.B) {
 }
 
 func BenchmarkBoth(b *testing.B) {
-	priorityList := New([]domain.Task{})
+	priorityList := NewPrioritizedTask([]domain.Task{})
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		priorityList.Add(domain.Task{Id: util.NewId(), ExecTime: int64(n)})

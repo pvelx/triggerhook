@@ -1,6 +1,7 @@
 package task_manager
 
 import (
+	"context"
 	"time"
 
 	"github.com/imdario/mergo"
@@ -66,7 +67,7 @@ type taskManager struct {
 	monitoring          contracts.MonitoringInterface
 }
 
-func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
+func (s *taskManager) Create(ctx context.Context, task *domain.Task, isTaken bool) error {
 	if now := time.Now().Unix(); task.ExecTime < now {
 		task.ExecTime = now
 	}
@@ -79,7 +80,7 @@ func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
 	}
 
 	err := s.retry(func() error {
-		return s.repository.Create(*task, isTaken)
+		return s.repository.Create(ctx, *task, isTaken)
 	}, contracts.RepoErrorDeadlock)
 
 	if err == contracts.RepoErrorTaskExist {
@@ -103,10 +104,10 @@ func (s *taskManager) Create(task *domain.Task, isTaken bool) error {
 	return nil
 }
 
-func (s *taskManager) Delete(taskId string) error {
+func (s *taskManager) Delete(ctx context.Context, taskId string) error {
 	var affected int64
 	errDeleting := s.retry(func() (err error) {
-		affected, err = s.repository.Delete([]domain.Task{{Id: taskId}})
+		affected, err = s.repository.Delete(ctx, []domain.Task{{Id: taskId}})
 		return
 	}, contracts.RepoErrorDeadlock)
 
@@ -129,10 +130,10 @@ func (s *taskManager) Delete(taskId string) error {
 	return nil
 }
 
-func (s *taskManager) GetTasksToComplete(preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
+func (s *taskManager) GetTasksToComplete(ctx context.Context, preloadingTimeRange time.Duration) (contracts.CollectionsInterface, error) {
 	var collections contracts.CollectionsInterface
 	errFinding := s.retry(func() (err error) {
-		collections, err = s.repository.FindBySecToExecTime(preloadingTimeRange)
+		collections, err = s.repository.FindBySecToExecTime(ctx, preloadingTimeRange)
 		return
 	}, contracts.RepoErrorDeadlock, contracts.RepoErrorLockWaitTimeout)
 
@@ -147,10 +148,10 @@ func (s *taskManager) GetTasksToComplete(preloadingTimeRange time.Duration) (con
 	return collections, nil
 }
 
-func (s *taskManager) ConfirmExecution(tasks []domain.Task) error {
+func (s *taskManager) ConfirmExecution(ctx context.Context, tasks []domain.Task) error {
 	var affected int64
 	errConfirm := s.retry(func() (err error) {
-		affected, err = s.repository.Delete(tasks)
+		affected, err = s.repository.Delete(ctx, tasks)
 		return
 	}, contracts.RepoErrorDeadlock)
 

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"encoding/csv"
 	"fmt"
@@ -74,7 +75,7 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	startWorkers := make(chan bool)
 	foundTasks := make(chan domain.Task, expectedTaskCount*2)
 
-	result, err := repository.FindBySecToExecTime(5 * time.Second)
+	result, err := repository.FindBySecToExecTime(context.Background(), 5*time.Second)
 	if err != nil {
 		log.Fatal(err, "Error while get tasks")
 	}
@@ -87,7 +88,7 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 			<-startWorkers
 
 			for {
-				tasks, err := result.Next()
+				tasks, err := result.Next(context.Background())
 				if err != nil {
 					if err == contracts.RepoErrorNoCollections {
 						break
@@ -108,11 +109,9 @@ func Test_FindBySecToExecTimeRaceCondition(t *testing.T) {
 	workersDone.Wait()
 	close(foundTasks)
 
-	var tasks = make([]domain.Task, 0, expectedTaskCount*2)
 	for task := range foundTasks {
-		tasks = append(tasks, task)
 		if _, exist := allTasks[task.Id]; exist {
-			assert.Fail(t, fmt.Sprintf("The task already was founded in previous time"))
+			assert.Fail(t, "The task already was founded in previous time")
 		}
 		allTasks[task.Id] = task
 		foundedCountOfTasks++
@@ -137,7 +136,7 @@ func TestFindBySecToExecTime(t *testing.T) {
 		countAllTask = countAllTask + count
 	}
 
-	collections, err := repository.FindBySecToExecTime(5 * time.Second)
+	collections, err := repository.FindBySecToExecTime(context.Background(), 5*time.Second)
 	if err != nil {
 		log.Fatal(err, "Error while get tasks")
 	}
@@ -146,7 +145,7 @@ func TestFindBySecToExecTime(t *testing.T) {
 	actualCollectionCount := 0
 
 	for {
-		tasks, errNext := collections.Next()
+		tasks, errNext := collections.Next(context.Background())
 		if errNext != nil {
 			if errNext == contracts.RepoErrorNoCollections {
 				break
@@ -157,7 +156,7 @@ func TestFindBySecToExecTime(t *testing.T) {
 
 		for _, task := range tasks {
 			if _, exist := allTasks[task.Id]; exist {
-				assert.Fail(t, fmt.Sprintf("Task was founded in previous time"))
+				assert.Fail(t, "Task was founded in previous time")
 			}
 			allTasks[task.Id] = task
 		}
@@ -167,7 +166,7 @@ func TestFindBySecToExecTime(t *testing.T) {
 
 		expectedCountTaskOnIteration, isFound = find(expectedCountTaskOnIteration, len(tasks))
 		if !isFound {
-			assert.Fail(t, fmt.Sprintf("Founded count of task in for collection is not correct"))
+			assert.Fail(t, "Founded count of task in for collection is not correct")
 		}
 	}
 
@@ -221,7 +220,7 @@ func TestCreateRaceCondition(t *testing.T) {
 			<-startWorkers
 			for _, item := range input {
 				for i := 0; i < item.tasksCount; i++ {
-					errCreate := repository.Create(getTaskInstance(now+item.relativeExecTime), item.isTaken)
+					errCreate := repository.Create(context.Background(), getTaskInstance(now+item.relativeExecTime), item.isTaken)
 					if errCreate != nil {
 						log.Fatal(errCreate, "Error while create")
 					}
@@ -338,7 +337,7 @@ func TestDeleteBunch(t *testing.T) {
 	collectionsMustBeDeleted := []int{25, 67, 107, 129}
 	collectionsMustNotBeDeleted := []int{14, 37, 42, 48, 63, 74, 81, 94, 100, 110, 122, 123, 124, 125, 126, 127, 128}
 
-	_, err := repository.Delete(tasksMustBeDeleted)
+	_, err := repository.Delete(context.Background(), tasksMustBeDeleted)
 	if err != nil {
 		log.Fatal(err, "Error while delete")
 	}
@@ -379,7 +378,7 @@ func TestCreate(t *testing.T) {
 	now := time.Now().Unix()
 	for _, item := range input {
 		for i := 0; i < item.tasksCount; i++ {
-			errCreate := repository.Create(getTaskInstance(now+item.relativeExecTime), item.isTaken)
+			errCreate := repository.Create(context.Background(), getTaskInstance(now+item.relativeExecTime), item.isTaken)
 			if errCreate != nil {
 				log.Fatal(errCreate, "Error while create")
 			}
@@ -437,7 +436,7 @@ func getCountCollectionsByParamsInDb(isTaken bool, execTime int64) int {
 		op = "="
 	}
 	var count int
-	query := fmt.Sprintf(`SELECT count(id) 
+	query := fmt.Sprintf(`SELECT count(id)
 		FROM collection
 		WHERE exec_time = ? AND taken_by_instance %s ?`, op)
 	err := db.QueryRow(query, execTime, appInstanceId).Scan(&count)

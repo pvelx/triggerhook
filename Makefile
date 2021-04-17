@@ -7,5 +7,7 @@ sending_and_confirmation:
 test:
 	GOMAXPROCS=4 go test ./ -v
 	GOMAXPROCS=4 go test ./repository -v
-	go test ./sender_service ./task_manager ./error_service \
-		./prioritized_task_list ./preloader_service ./monitoring_service ./waiting_service -v
+	go test ./sender_service ./task_manager ./error_service ./preloader_service ./monitoring_service ./waiting_service -v
+
+pre-commit:
+	pre-commit run --all-files

@@ -1,6 +1,7 @@
 package preloader_service
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -18,7 +19,8 @@ type Options struct {
 	CoefTimePreloadOfNewTask int
 	TaskNumberInOneSearch    int
 	WorkersCount             int
-	PreloadedTaskCap         int
+	CtxTimeout               time.Duration
+	PreloadedTaskCap         int //Deprecated
 }
 
 func New(
@@ -37,20 +39,15 @@ func New(
 		CoefTimePreloadOfNewTask: 2,
 		TaskNumberInOneSearch:    1000,
 		WorkersCount:             10,
-		PreloadedTaskCap:         1000000,
+		CtxTimeout:               5 * time.Second,
 	}
 
 	if err := mergo.Merge(options, defaultOptions); err != nil {
 		panic(err)
 	}
 
-	preloadedTask := make(chan domain.Task, options.PreloadedTaskCap)
+	preloadedTask := make(chan domain.Task, 1)
 
-	if err := monitoring.Listen(contracts.WaitingForSending, func() int64 {
-		return int64(len(preloadedTask))
-	}); err != nil {
-		panic(err)
-	}
 	if err := monitoring.Init(contracts.CreatingRate, contracts.VelocityMetricType); err != nil {
 		panic(err)
 	}
@@ -67,6 +64,7 @@ func New(
 		taskNumberInOneSearch:    options.TaskNumberInOneSearch,
 		workersCount:             options.WorkersCount,
 		monitoring:               monitoring,
+		ctxTimeout:               options.CtxTimeout,
 	}
 }
 
@@ -79,17 +77,18 @@ type preloadingService struct {
 	taskNumberInOneSearch    int
 	workersCount             int
 	monitoring               contracts.MonitoringInterface
+	ctxTimeout               time.Duration
 }
 
 func (s *preloadingService) GetPreloadedChan() <-chan domain.Task {
 	return s.preloadedTask
 }
 
-func (s *preloadingService) AddNewTask(task *domain.Task) error {
+func (s *preloadingService) AddNewTask(ctx context.Context, task *domain.Task) error {
 	relativeTimeToExec := time.Duration(task.ExecTime-time.Now().Unix()) * time.Second
 	isTaken := s.timePreload*time.Duration(s.coefTimePreloadOfNewTask) > relativeTimeToExec
 
-	if err := s.taskManager.Create(task, isTaken); err != nil {
+	if err := s.taskManager.Create(ctx, task, isTaken); err != nil {
 		return err
 	}
 
@@ -106,16 +105,19 @@ func (s *preloadingService) AddNewTask(task *domain.Task) error {
 
 func (s *preloadingService) Run() {
 	for {
-		result, err := s.taskManager.GetTasksToComplete(s.timePreload)
+		ctx, stop := context.WithTimeout(context.Background(), s.ctxTimeout)
+		result, err := s.taskManager.GetTasksToComplete(ctx, s.timePreload)
 		switch {
 		case err == contracts.TmErrorCollectionsNotFound:
+			stop()
 			s.eh.New(contracts.LevelDebug, "I go to sleep because I don't get any tasks", nil)
 			time.Sleep(s.timePreload)
 
 			continue
 		case err != nil:
+			stop()
 			/*
-				Stop application
+				Stop the application
 			*/
 			s.eh.New(contracts.LevelFatal, "preloader cannot get bunches of tasks", nil)
 
@@ -125,16 +127,17 @@ func (s *preloadingService) Run() {
 		var wg sync.WaitGroup
 		for worker := 0; worker < s.workersCount; worker++ {
 			wg.Add(1)
-			go s.getBunchOfTask(&wg, result, worker)
+			go s.getBunchOfTask(ctx, &wg, result, worker)
 		}
 		wg.Wait()
+		stop()
 	}
 }
 
-func (s *preloadingService) getBunchOfTask(wg *sync.WaitGroup, result contracts.CollectionsInterface, worker int) {
+func (s *preloadingService) getBunchOfTask(ctx context.Context, wg *sync.WaitGroup, result contracts.CollectionsInterface, worker int) {
 	defer wg.Done()
 	for {
-		tasks, err := result.Next()
+		tasks, err := result.Next(ctx)
 		if err != nil {
 			if err == contracts.RepoErrorNoCollections {
 				s.eh.New(contracts.LevelDebug, "end", map[string]interface{}{

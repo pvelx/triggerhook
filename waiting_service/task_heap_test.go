@@ -1,4 +1,4 @@
-package prioritized_task_list
+package waiting_service
 
 import (
 	"math/rand"
@@ -12,7 +12,7 @@ import (
 
 func TestShuffleTask(t *testing.T) {
 	tasks := getShuffleTasks(int64(1e+5))
-	taskHeap := New([]domain.Task{})
+	taskHeap := NewPrioritizedTask([]domain.Task{})
 	for _, task := range tasks {
 		taskHeap.Add(task)
 	}
@@ -35,12 +35,12 @@ func getShuffleTasks(countOfTasks int64) []domain.Task {
 	return tasks
 }
 
-func TestDeleteTask(t *testing.T) {
+func TestDeleteTaskFromHeap(t *testing.T) {
 	task1 := domain.Task{Id: util.NewId(), ExecTime: 1}
 	task2 := domain.Task{Id: util.NewId(), ExecTime: 2}
 	task3 := domain.Task{Id: util.NewId(), ExecTime: 3}
 
-	taskHeap := New([]domain.Task{})
+	taskHeap := NewPrioritizedTask([]domain.Task{})
 
 	taskHeap.Add(task1)
 	taskHeap.Add(task2)

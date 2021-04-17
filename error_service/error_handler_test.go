@@ -55,8 +55,7 @@ func TestSendEvent(t *testing.T) {
 			contracts.LevelError: func(event contracts.EventError) { eventError <- event },
 			contracts.LevelFatal: func(event contracts.EventError) { eventFatal <- event },
 		},
-		Debug:    true,
-		EventCap: 0,
+		Debug: true,
 	})
 
 	go func() {

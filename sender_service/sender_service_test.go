@@ -1,6 +1,8 @@
 package sender_service
 
 import (
+	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -8,14 +10,20 @@ import (
 	"github.com/pvelx/triggerhook/error_service"
 	"github.com/pvelx/triggerhook/monitoring_service"
 	"github.com/pvelx/triggerhook/task_manager"
-	"github.com/pvelx/triggerhook/util"
 	"github.com/stretchr/testify/assert"
 )
 
 func createTasks(taskReadyToSend chan domain.Task, count int) {
 	for i := 0; i < count; i++ {
-		taskReadyToSend <- domain.Task{Id: util.NewId(), ExecTime: time.Now().Unix()}
+		taskReadyToSend <- domain.Task{ExecTime: time.Now().Unix()}
 	}
+}
+
+func sum(s []int) (r int) {
+	for _, v := range s {
+		r += v
+	}
+	return
 }
 
 /*
@@ -25,21 +33,45 @@ func createTasks(taskReadyToSend chan domain.Task, count int) {
 	The batch size and frequency of sending are affected by the BatchMaxItems and BatchTimeout parameters.
 */
 func TestConfirmation(t *testing.T) {
-	expTasksLen := make(chan int, 7)
-	expTasksLen <- 400
-	expTasksLen <- 1000
-	expTasksLen <- 500
-	expTasksLen <- 1000
-	expTasksLen <- 1000
-	expTasksLen <- 1000
-	expTasksLen <- 300
+	inputTasksSequence := []struct {
+		numberOfTask int
+		timeout      time.Duration //timeout between tasks creation
+	}{
+		{200, 25 * time.Millisecond},
+		{200, 125 * time.Millisecond},
+		{1500, 75 * time.Millisecond},
+		{3300, 0},
+	}
 
+	expectedTasksSequence := []int{400, 1000, 500, 1000, 1000, 1000, 300}
+
+	//duration of saving in DB
 	confirmationDuration := 100 * time.Millisecond
-	taskReadyToSend := make(chan domain.Task, 100000)
 
-	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(tasks []domain.Task) error {
-		assert.Equal(t, <-expTasksLen, len(tasks), "bunch of tasks has not correct length")
-		time.Sleep(confirmationDuration)
+	taskReadyToSend := make(chan domain.Task, sum(expectedTasksSequence))
+
+	done := make(chan struct{})
+	mu := &sync.RWMutex{}
+	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(ctx context.Context, tasks []domain.Task) error {
+		var exp int
+		mu.Lock()
+		exp, expectedTasksSequence = expectedTasksSequence[0], expectedTasksSequence[1:]
+		mu.Unlock()
+
+		assert.Equal(t, exp, len(tasks), "bunch of tasks has not correct length")
+		now := time.Now()
+
+		//tasks is processed
+		mu.RLock()
+		l := len(expectedTasksSequence)
+		mu.RUnlock()
+		if l == 0 {
+			close(done)
+		}
+
+		//some work. Loop instead of sleep because tracing will better
+		for time.Since(now) < confirmationDuration {
+		}
 
 		return nil
 	}}
@@ -57,27 +89,23 @@ func TestConfirmation(t *testing.T) {
 		}
 	}()
 
-	go createTasks(taskReadyToSend, 200)
-	time.Sleep(25 * time.Millisecond)
-	go createTasks(taskReadyToSend, 200)
-	time.Sleep(125 * time.Millisecond)
-	go createTasks(taskReadyToSend, 1500)
-	time.Sleep(75 * time.Millisecond)
-	go createTasks(taskReadyToSend, 3300)
+	for _, v := range inputTasksSequence {
+		createTasks(taskReadyToSend, v.numberOfTask)
+		time.Sleep(v.timeout)
+	}
 
-	//waiting for tasks to be processed
-	time.Sleep(time.Second)
+	<-done
 
-	assert.Len(t, expTasksLen, 0, "not all task was handle")
+	assert.Len(t, expectedTasksSequence, 0, "not all task was handle")
 }
 
 func TestConsuming(t *testing.T) {
 
-	tries := 10
+	expTries := 10
 	countTasks := 6
 	taskReadyToSend := make(chan domain.Task, countTasks)
 
-	success := make(chan bool, tries)
+	success := make(chan bool, expTries)
 	success <- true
 	success <- true
 	success <- true
@@ -89,7 +117,7 @@ func TestConsuming(t *testing.T) {
 	success <- false
 	success <- true
 
-	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(tasks []domain.Task) error {
+	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(ctx context.Context, tasks []domain.Task) error {
 		assert.Len(t, tasks, countTasks, "count task is not correct")
 		return nil
 	}}
@@ -107,6 +135,7 @@ func TestConsuming(t *testing.T) {
 
 	actualTries := 0
 
+	done := make(chan struct{})
 	go func() {
 		for {
 			result := senderService.Consume()
@@ -118,11 +147,14 @@ func TestConsuming(t *testing.T) {
 			}
 
 			actualTries++
+
+			if (actualTries) == expTries {
+				close(done)
+			}
 		}
 	}()
 
-	//waiting for tasks to be processed
-	time.Sleep(100 * time.Millisecond)
+	<-done
 
-	assert.Equal(t, tries, actualTries, "tries count is not correct")
+	assert.Equal(t, expTries, actualTries, "tries count is not correct")
 }

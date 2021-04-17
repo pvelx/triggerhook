@@ -1,18 +1,44 @@
 package waiting_service
 
 import (
+	"context"
 	"math"
 	"time"
 
 	"github.com/imdario/mergo"
 	"github.com/pvelx/triggerhook/contracts"
 	"github.com/pvelx/triggerhook/domain"
-	"github.com/pvelx/triggerhook/prioritized_task_list"
 )
 
+/*	--------------------------------------------------
+	Prioritized task list
+*/
+
+type prioritizedTaskListInterface interface {
+	/*
+		Count of tasks in the list
+	*/
+	Len() int
+
+	/*
+		Add a task to the list based on priority
+	*/
+	Add(task domain.Task)
+
+	/*
+		Take the most prioritized task and delete from list
+	*/
+	Take() *domain.Task
+
+	/*
+		Searches for a task and deletes it return true when the task was deleted, false - when was not found
+	*/
+	DeleteIfExist(taskId string) bool
+}
+
 type Options struct {
-	TasksReadyToSendCap   int
-	CanceledTasksCap      int
+	TasksReadyToSendCap   int //Deprecated
+	CanceledTasksCap      int //Deprecated
 	GreedyProcessingLimit int
 }
 
@@ -29,14 +55,12 @@ func New(
 	}
 
 	if err := mergo.Merge(options, Options{
-		TasksReadyToSendCap:   1000000,
-		CanceledTasksCap:      1000000,
 		GreedyProcessingLimit: 10,
 	}); err != nil {
 		panic(err)
 	}
 
-	tasksWaitingList := prioritized_task_list.New([]domain.Task{})
+	tasksWaitingList := NewPrioritizedTask([]domain.Task{})
 
 	if err := monitoring.Listen(contracts.Preloaded, func() int64 {
 		return int64(tasksWaitingList.Len())
@@ -50,8 +74,8 @@ func New(
 	service := &waitingService{
 		tasksWaitingList:      tasksWaitingList,
 		preloadedTasks:        preloadedTasks,
-		canceledTasks:         make(chan string, options.CanceledTasksCap),
-		tasksReadyToSend:      make(chan domain.Task, options.TasksReadyToSendCap),
+		canceledTasks:         make(chan string, 1),
+		tasksReadyToSend:      make(chan domain.Task, 1),
 		greedyProcessingLimit: options.GreedyProcessingLimit,
 		monitoring:            monitoring,
 		taskManager:           taskManager,
@@ -62,7 +86,7 @@ func New(
 }
 
 type waitingService struct {
-	tasksWaitingList      contracts.PrioritizedTaskListInterface
+	tasksWaitingList      prioritizedTaskListInterface
 	preloadedTasks        <-chan domain.Task
 	canceledTasks         chan string
 	tasksReadyToSend      chan domain.Task
@@ -76,8 +100,8 @@ func (s *waitingService) GetReadyToSendChan() chan domain.Task {
 	return s.tasksReadyToSend
 }
 
-func (s *waitingService) CancelIfExist(taskId string) error {
-	if err := s.taskManager.Delete(taskId); err != nil {
+func (s *waitingService) CancelIfExist(ctx context.Context, taskId string) error {
+	if err := s.taskManager.Delete(ctx, taskId); err != nil {
 		return err
 	}
 	s.canceledTasks <- taskId
