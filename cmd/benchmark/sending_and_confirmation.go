@@ -24,7 +24,12 @@ func upInitialState(taskCount int) {
 	fmt.Println("\nup initial state")
 	preparingBar := pb.StartNew(taskCount)
 
-	conn := connection.New(nil)
+	conn := connection.New(&connection.Options{
+		User:     mysqlUser,
+		Password: mysqlPassword,
+		Host:     mysqlHost,
+		DbName:   mysqlDbName,
+	})
 	errorService := error_service.New(nil)
 	repositoryService := repository.New(conn, util.NewId(), errorService, nil)
 

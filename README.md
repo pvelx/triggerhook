@@ -1,14 +1,15 @@
-## Trigger Hook - отложенный запуск задач
+## Trigger Hook - delayed launch of tasks
 
 [![Build Status](https://travis-ci.com/pvelx/triggerhook.svg?branch=master)](https://travis-ci.com/pvelx/triggerhook)
 [![GitHub release](https://img.shields.io/github/release/pvelx/triggerhook.svg?include_prereleases)](https://github.com/pvelx/triggerhook/releases/latest)
 
-Часто в проектах возникает необходимость выполнения отложенных задач, таких как отправка email, push и тп.
-При наступления времени выполнения задачи, Trigger Hook посылает триггер на запуск.
-Акцент данной библиотеки делается на выполнение единичных задач в определенное время.
-Данная библиотека делает только одно - сообщает когда нужно запустить задачу.
+Often in projects, there is a need to perform deferred tasks,
+such as sending email, push, and other tasks specific to the domain area of your application.
+Difficulties begin when the usual crontab is no longer enough,
+when batch processing is not suitable, when each task unit has its own execution time or it is assigned dynamically.
+To solve this problem, a Trigger Hook was created. You can build a task scheduler based on this library.
 
-### Принцип работы
+### Principle of operation
 
 ![Principle of operation](asset/scheme-v5.gif)
 
@@ -22,49 +23,74 @@ Task  | Description
 ![Task](asset/black.jpg)|command to delete
 
 
-- При создании задачи она попадает в базу данных (квадратный блок).
-- В оперативную память подгружаются задачи (на схеме треугольный блок),
-если время запуска менее чем через 5 секунд (по умолчанию).
-- При наступлении времени (exec time) отправляется триггер на выполнение задачи.
-- В случае успешной отправки триггера задача удаляется из базы данных.
-
-На схеме перед и после отправки триггера показаны буферы для для задач.
-Буфер перед отправкой нужен когда пропускная способность канала отправки триггера ограничена.
-Буфер после нужен для компенсации краткосрочной,
-пиковой нагрузки в случае если скорость подтверждения будет меньше скрости отправки.
-
-На схеме представленны некоторые из метрик приложения:
-
-Метрика  | Описание
-------------------|----------------------
-All|Общее количество задач
-Waiting for confirmation | Количество задач ожидающих подтверждения после отправки. Последний этап работы с задачей. Чем меньше значение тем лучше. Наличие задач в данной метрике говорит о замедленной работе с базой данных.
-Confirmation rate | Скорость подтверждения задач после отправки.
-Preloaded | Количество задач предзагруженных в оперативную память.
-Preloading rate | Количество задач подгруженных за единицу времени
-Waiting for sending | Количество задач достигших времени выполнения и ожидающих отправки обработчику. Чем меньше значение тем лучше. Наличие задач в данной метрике говорит о пониженной пропускной способности обработчика задач.
-Creating rate | Количество созданных задач (через метод Create) за единицу времени
-Deleting rate | Количество удаленных задач (через метод Delete) за единицу времени
-Sending rate | Количество обработанных задач (через метод Consume) за единицу времени
+Life cycle tasks:
+- When creating a task, it gets into the database (square block) (red and yellow).
+- Tasks are loaded into memory (triangular block) if their start time is coming soon (red->yellow).
+This structure is implemented in the form of a prioritized queue (heap).
+- When the task execution time comes, it is sent for execution (yellow->green).
+An intermediate buffer is used before processing to compensate for peak loads.
+- If the task is successfully submitted, it is deleted from the database (green->blue).
+An intermediate buffer is used before deletion, also to compensate for peak loads.
 
 
-### Особенности:
-- Лаконичный API.
-- Выполнение задач с секундной точностью.
-- Большая производительность отправки задач на выполнение. Достигается за счет простой схемы хранения задач, индексирования и многопоточного доступа к базе данных.
-- Еще бОльшая краткосрочная производительность. Задачи, время выполнения которых скоро наступит, подгружаются в оперативную память заранее. Это особенно важно, например, если в на одно время назначено выполнение нескольких сотен тысяч задач.
-- Система обладает стойкостью (durability) к сбоям. Только после выполнения задачи из базы данных удаляется задача. Это гарантирует отправку задачи на выполнение. Внезапное остановка приложения не приведет к несогласованности данных в базе данных.
-- Заточен под микро-сервисную, событийно ориентированную архитектуру. Легко поместить в контейнер. Легко реализовать полностью асинхронный API.
-- Модульная структура библиотеки. Легко можно заменить какую либо часть своей реализацией.
-- Мониторинг состояния приложения. Встроенный адаптер мониторинга показателей производительности. Встроенный адаптер для логирования ошибок.
+The diagram shows some of the application metrics:
 
-### Требования
+Metric|Description
+---|---
+All|Total number of tasks
+Creating rate | Number of created tasks (via the Create method) per unit of time.
+Deleting rate | Number of deleted tasks (via the Delete method) per unit of time.
+Sending rate | The number of processed tasks (via the Consume method) per unit of time.
+Preloaded | The number of tasks preloaded into memory.
+Preloading rate | The number of tasks loaded per unit of time.
+Waiting for sending | The number of tasks that have reached the execution time and are waiting to be sent to the consumer. The lower the value, the better. The presence of tasks in this metric indicates a reduced capacity of the task consumer.
+Waiting for confirmation | The number of tasks waiting for confirmation after sending. The last stage of working with the task. The lower the value, the better. The presence of tasks in this metric indicates slow work with the database.
+Confirmation rate | The number of confirmed tasks after sending per unit of time.
 
-Проект использует базу данных MySql версий 5.7 или 8
+### Demo
+[Use the demo](https://github.com/pvelx/k8s-message-demo)
+[Read the article](https://vlad-pavlenko.medium.com/deferred-tasks-in-a-microservice-architecture-8e7273089ee7)
 
-### Быстрый старт
+### Features
+- Simple API.
+- Performing tasks with second precision.
+- High performance of sending tasks for execution. This is achieved through a simple task storage scheme, indexing, and multithreaded database access.
+- High peak performance. Tasks that will be completed soon are loaded into memory in advance. This is especially important, for example, if several hundred thousand tasks are assigned at one time.
+- The system is durable to failures. Only after the task is completed, the task is deleted from the database. This ensures that the task is sent for execution. The sudden stop of the application will not lead to inconsistent data in the database.
+- It is designed for a micro-service, event-driven architecture. It is easy to implement a fully asynchronous API.
+- The modular structure of the library. You can easily replace any part with your own implementation.
+- Monitoring the status of the application. Built-in performance monitoring adapter. Built-in adapter for error logging.
 
-Методы Create, Delete, Consume безопасны при использовании в нескольких горутинах.
+### Benchmark
+The main indicators of the task processing speed were measured.
+
+Application server:
+- AWS EC2 Ubuntu 20
+- t2.micro
+- 1 vCPUs 2.5 GHz
+- 1 GiB RAM
+
+Database server:
+- AWS RDS MySQL 8.0
+- db.t3.micro
+- 2 vCPUs
+- 1 GiB RAM
+- Network: 2085 Mbps
+
+Test|The duration of the test|Average speed (tasks/sec)|Number of tasks
+---|---|---|---
+Creating tasks|1m 11s|1396|100000
+Deleting tasks|52s|1920|100000
+Sending tasks (task status from red to blue)|498ms|200668|100000
+Confirm tasks (the status of the task from the blue to the delete)|2s|49905|100000
+
+### Requirements
+
+The project uses a MySQL database version 5.7 or 8
+
+### Quick start
+
+The Create, Delete, and Consume methods are safe when used in multiple goroutines.
 
 ```go
 package main
@@ -74,9 +100,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/pvelx/triggerHook"
-	"github.com/pvelx/triggerHook/connection"
-	"github.com/pvelx/triggerHook/domain"
+	"github.com/pvelx/triggerhook"
+	"github.com/pvelx/triggerhook/connection"
+	"github.com/pvelx/triggerhook/domain"
 	"github.com/satori/go.uuid"
 )
 
@@ -87,7 +113,7 @@ func send(id string, execTime int64) error {
 }
 
 func main() {
-	tasksDeferredService := triggerHook.Build(triggerHook.Config{
+	tasksDeferredService := triggerhook.Build(triggerhook.Config{
 		Connection: connection.Options{
 			Host: "127.0.0.1:3306",
 		},
@@ -129,13 +155,10 @@ func main() {
 }
 ```
 
-
-#### Внимание!
-В случае аварийного завершения приложения, есть вероятность, что выполнение некоторых задач может быть не подтверждено в базе данных.
-При повторном запуске приложения эти задачи будут отправлены на выполнение повторно.
-Такое поведение является компромиссом в пользу обеспечения стойкости к сбоям.
-Ваше приложение должно игнорировать повторное получение триггеров на обработку.
-
+If the application crashes, there is a possibility that some tasks may not be confirmed in the database.
+When you restart the application, these tasks will be sent for execution again.
+This behavior is a trade-off in favor of providing fault tolerance.
+When your application receives a message from Trigger Hook, it should only execute the task once, and ignore it when it receives it again.
 
 ## License
 
