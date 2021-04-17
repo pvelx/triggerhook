@@ -125,13 +125,13 @@ func main() {
 				Id:       uuid.NewV4().String(),
 				ExecTime: time.Now().Add(time.Minute).Unix(),
 			}
-			if err := tasksDeferredService.Create(&task); err != nil {
+			if err := tasksDeferredService.CreateCtx(context.Background(), &task); err != nil {
 				log.Fatalf("error creating task: %v", err)
 			}
 
 			// Delete each tenth task
 			if i%10 == 0 {
-				if err := tasksDeferredService.Delete(task.Id); err != nil {
+				if err := tasksDeferredService.DeleteCtx(context.Background(), task.Id); err != nil {
 					log.Fatalf("error deleting task: %v", err)
 				}
 			}
