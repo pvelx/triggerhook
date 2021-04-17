@@ -19,7 +19,7 @@ type Options struct {
 	CtxTimeout               time.Duration
 }
 
-var taskToSendPool *sync.Pool
+var taskToSendPool sync.Pool
 
 func New(
 	taskManager contracts.TaskManagerInterface,
@@ -56,7 +56,7 @@ func New(
 	tasksToConfirm := make(chan domain.Task, options.BatchMaxItems)
 	buffer := NewBuffer()
 
-	taskToSendPool = &sync.Pool{
+	taskToSendPool = sync.Pool{
 		New: func() interface{} {
 			return &taskToSend{
 				monitoring: monitoring,

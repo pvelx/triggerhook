@@ -51,7 +51,7 @@ func TestConfirmation(t *testing.T) {
 	taskReadyToSend := make(chan domain.Task, sum(expectedTasksSequence))
 
 	done := make(chan struct{})
-	mu := &sync.Mutex{}
+	mu := &sync.RWMutex{}
 	taskManagerMock := &task_manager.TaskManagerMock{ConfirmExecutionMock: func(ctx context.Context, tasks []domain.Task) error {
 		var exp int
 		mu.Lock()
@@ -62,7 +62,10 @@ func TestConfirmation(t *testing.T) {
 		now := time.Now()
 
 		//tasks is processed
-		if len(expectedTasksSequence) == 0 {
+		mu.RLock()
+		l := len(expectedTasksSequence)
+		mu.RUnlock()
+		if l == 0 {
 			close(done)
 		}
 

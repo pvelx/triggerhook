@@ -3,6 +3,7 @@ package waiting_service
 import (
 	"context"
 	"math/rand"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,7 +20,7 @@ func init() {
 }
 
 func TestAddNormalTask(t *testing.T) {
-	inputCountOfTasks := 10000
+	var inputCountOfTasks int32 = 10000
 	dispersion := 5
 	offset := 0
 	pause := 5 * time.Second
@@ -32,7 +33,7 @@ func TestAddNormalTask(t *testing.T) {
 	go waitingService.Run()
 
 	go func() {
-		for i := 0; i < inputCountOfTasks; i++ {
+		for i := int32(0); i < inputCountOfTasks; i++ {
 			preloadedTask <- newTask(offset, dispersion)
 			if i%(inputCountOfTasks/10) == 0 {
 				time.Sleep(pauseStep)
@@ -41,11 +42,11 @@ func TestAddNormalTask(t *testing.T) {
 		close(wait)
 	}()
 
-	actualCountOfTasks := 0
+	var actualCountOfTasks int32
 	go func() {
 		for task := range waitingService.GetReadyToSendChan() {
 			assert.Equal(t, time.Now().Unix(), task.ExecTime, "time execution in not equal to current time")
-			actualCountOfTasks++
+			atomic.AddInt32(&actualCountOfTasks, 1)
 		}
 	}()
 
@@ -53,7 +54,7 @@ func TestAddNormalTask(t *testing.T) {
 	<-wait
 	time.Sleep((time.Duration(offset + dispersion + 1)) * time.Second)
 
-	assert.Equal(t, inputCountOfTasks, actualCountOfTasks, "tasks count is not correct")
+	assert.Equal(t, inputCountOfTasks, atomic.LoadInt32(&actualCountOfTasks), "tasks count is not correct")
 }
 
 func TestDeleteTask(t *testing.T) {
@@ -89,7 +90,7 @@ func TestDeleteTask(t *testing.T) {
 }
 
 func TestAddLateTask(t *testing.T) {
-	inputCountOfTasks := 10000
+	var inputCountOfTasks int32 = 10000
 	dispersion := 10
 	offset := -10
 	preloadedTask := make(chan domain.Task, inputCountOfTasks)
@@ -100,23 +101,23 @@ func TestAddLateTask(t *testing.T) {
 	go waitingService.Run()
 
 	//receive task after waiting
-	actualCountOfTasks := 0
+	var actualCountOfTasks int32
 	go func() {
 		for task := range waitingService.GetReadyToSendChan() {
 			now := time.Now().Unix()
 			assert.Less(t, task.ExecTime, now+int64(offset+dispersion), "the task goes beyond the time")
 			assert.GreaterOrEqual(t, task.ExecTime, now+int64(offset), "the task goes beyond the time")
-			actualCountOfTasks++
+			atomic.AddInt32(&actualCountOfTasks, 1)
 		}
 	}()
 
-	for i := 0; i < inputCountOfTasks; i++ {
+	for i := int32(0); i < inputCountOfTasks; i++ {
 		preloadedTask <- newTask(offset, dispersion)
 	}
 
 	time.Sleep(100 * time.Millisecond)
 
-	assert.Equal(t, inputCountOfTasks, actualCountOfTasks, "tasks count is not correct")
+	assert.Equal(t, inputCountOfTasks, atomic.LoadInt32(&actualCountOfTasks), "tasks count is not correct")
 }
 
 func instanceOfWaitingService(preloadedTask chan domain.Task) contracts.WaitingServiceInterface {

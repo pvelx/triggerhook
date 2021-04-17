@@ -74,14 +74,16 @@ func TestMainFlow(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 
 			wait := make(chan bool)
+			periodInputPub := test.periodInputPub
+			inputMeasurement := test.inputMeasurement
 			for worker := 0; worker < workers; worker++ {
 				go func() {
 					<-wait
-					for _, measure := range test.inputMeasurement {
+					for _, measure := range inputMeasurement {
 						if err := monitoringService.Publish(topicName, measure); err != nil {
 							fatalErrors <- err
 						}
-						time.Sleep(test.periodInputPub)
+						time.Sleep(periodInputPub)
 					}
 				}()
 			}
